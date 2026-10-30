@@ -52,3 +52,31 @@ export async function expectRejectsAsync(action: () => Promise<unknown>, label =
   expect(error, label).toBeInstanceOf(Error);
   expect((error as Error).message).not.toMatch(/\(phase \w+ stub\)/);
 }
+
+/** Upstream codes carry a product prefix; ours are bare. Strings elsewhere are compared as-is. */
+export function stripPrefix<T>(value: T): T {
+  if (typeof value === 'string') return value.replace(/^VOID_/, '') as T;
+  if (Array.isArray(value)) return value.map(stripPrefix) as T;
+  if (value && typeof value === 'object' && !ArrayBuffer.isView(value)) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, stripPrefix(v)])) as T;
+  }
+  return value;
+}
+
+export const codeOf = (e: unknown) => String((e as { code?: unknown })?.code ?? '').replace(/^VOID_/, '');
+async function capture(fn: () => unknown): Promise<unknown> {
+  try {
+    await fn();
+  } catch (e) {
+    return e;
+  }
+  return undefined;
+}
+/** Both must fail with the same (prefix-stripped) code; a stub's error never counts. */
+export async function expectSameFailure(ref: () => unknown, got: () => unknown) {
+  const r = await capture(ref), g = await capture(got);
+  expect(r, 'must fail upstream').toBeInstanceOf(Error);
+  expect(g, 'must fail').toBeInstanceOf(Error);
+  expect((g as Error).message).not.toMatch(/\(phase \w+ stub\)/);
+  expect(codeOf(g), `code (upstream: ${(r as Error).message})`).toBe(codeOf(r));
+}

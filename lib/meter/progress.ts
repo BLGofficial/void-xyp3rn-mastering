@@ -1,7 +1,10 @@
 import type { ProgressOptions } from './types';
 
+/** Error carrying a stable code the engine passes through unchanged. */
+export const codedError = (code: string, message: string) => Object.assign(new Error(message), { code });
+
 export function assertNotAborted(signal?: AbortSignal): void {
-  if (signal?.aborted) throw new Error('Operation cancelled.');
+  if (signal?.aborted) throw codedError('CANCELLED', 'Operation cancelled.');
 }
 
 /** Hand the main thread back so long analyses keep the UI responsive. */

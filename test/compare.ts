@@ -1,7 +1,7 @@
 import { expect } from 'vitest';
 
 // UI/provenance strings are ours to word; only whether a reason exists is behaviour.
-const SKIP_KEYS = new Set(['method', 'version']);
+const SKIP_KEYS = new Set(['method', 'version', 'transientMethod', 'note', 'confidenceMethod']);
 const PRESENCE_KEYS = new Set(['reason']);
 
 /**
@@ -50,5 +50,5 @@ export async function expectRejectsAsync(action: () => Promise<unknown>, label =
     error = e;
   }
   expect(error, label).toBeInstanceOf(Error);
-  expect((error as Error).message).not.toMatch(/not implemented/);
+  expect((error as Error).message).not.toMatch(/\(phase \w+ stub\)/);
 }

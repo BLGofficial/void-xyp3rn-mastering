@@ -33,7 +33,7 @@ const assertFloat32 = (frame: Float64Array, message: string) => {
 export class Chain {
   /** Total alignment latency in samples (limiter lookahead, oversampler group delay). */
   readonly latency: number;
-  private state: ChainState;
+  private current: ChainState;
   private readonly processors: Processor[];
   private readonly frame: Float64Array;
   private readonly sendInput: Float64Array;
@@ -43,14 +43,14 @@ export class Chain {
 
   constructor(state: ChainState, readonly sampleRate: number, readonly channels: number, private readonly options: ChainOptions = {}) {
     assertContext(sampleRate, channels);
-    this.state = validateState(state);
-    assertWidthChannels(this.state, channels);
-    this.processors = this.state.processors.map(p => createProcessor(p, sampleRate, channels, this.state.quality ?? 'standard'));
+    this.current = validateState(state);
+    assertWidthChannels(this.current, channels);
+    this.processors = this.current.processors.map(p => createProcessor(p, sampleRate, channels, this.current.quality ?? 'standard'));
     this.latency = this.processors.reduce((n, p) => n + p.latency, 0);
     this.frame = new Float64Array(channels);
     this.sendInput = new Float64Array(channels);
     this.sendSum = new Float64Array(channels);
-    this.targetGain = ramp(10 ** ((this.state.loudnessTarget?.correctionDb ?? 0) / 20));
+    this.targetGain = ramp(10 ** ((this.current.loudnessTarget?.correctionDb ?? 0) / 20));
   }
 
   /** Apply new settings with 10 ms ramps. Graph topology, quality and limiter detector mode must not change. */
@@ -59,7 +59,7 @@ export class Chain {
     if (this.options.offline) fail('Offline chain settings are immutable. Create a new render for changed settings.');
     const next = validateState(state);
     assertWidthChannels(next, this.channels);
-    if (next.quality !== this.state.quality) fail('Stop playback before changing processing quality.');
+    if (next.quality !== this.current.quality) fail('Stop playback before changing processing quality.');
     const sameGraph = next.processors.length === this.processors.length &&
       next.processors.every((p, i) => p.id === this.processors[i]!.state.id && p.instanceId === this.processors[i]!.state.instanceId);
     if (!sameGraph) fail('Stop playback before changing graph order or modules.');
@@ -67,7 +67,7 @@ export class Chain {
     if (next.processors.some((p, i) => p.id === 'limit' && p.parameters.truePeak !== this.processors[i]!.state.parameters.truePeak)) {
       fail('Pause playback before changing limiter detection mode.');
     }
-    this.state = next;
+    this.current = next;
     next.processors.forEach((p, i) => this.processors[i]!.update(p));
     retarget(this.targetGain, 10 ** ((next.loudnessTarget?.correctionDb ?? 0) / 20), Math.max(1, Math.round(this.sampleRate * 0.01)));
   }
@@ -89,7 +89,21 @@ export class Chain {
     this.disposed = true;
   }
 
-  private processFrame(frame: Float64Array): void {
+  /** Validated settings currently applied. */
+  get state(): ChainState {
+    return this.current;
+  }
+
+  /** Per-module view for metering (gain reduction of the last frame). */
+  get modules(): ReadonlyArray<Pick<Processor, 'state' | 'reductionDb'>> {
+    return this.processors;
+  }
+
+  /**
+   * Process one interleaved frame in place (offline renderers drive frames directly).
+   * @throws On non-finite input or output beyond Float32 range.
+   */
+  processFrame(frame: Float64Array): void {
     if (this.disposed) fail('Chain is disposed.');
     for (let c = 0; c < frame.length; c++) if (!Number.isFinite(frame[c])) fail('Non-finite DSP input.');
     const processors = this.processors, offline = this.options.offline === true;

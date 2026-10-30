@@ -25,14 +25,29 @@ const FILES = {
 const out = join(dirname(fileURLToPath(import.meta.url)), '..', 'vendor', 'void-oracle');
 await mkdir(out, { recursive: true });
 
-for (const [name, expected] of Object.entries(FILES)) {
-  const res = await fetch(`${BASE}/${name}?ver=${PLUGIN_VERSION}`);
-  if (!res.ok) throw new Error(`${name}: HTTP ${res.status}`);
-  const body = Buffer.from(await res.arrayBuffer());
-  const actual = createHash('sha256').update(body).digest('hex');
-  if (actual !== expected) {
-    throw new Error(`${name}: sha256 ${actual} != pinned ${expected}. Upstream changed; re-pin deliberately.`);
+// The host's CDN/WAF has served CI runners different bytes intermittently, so a
+// mismatch is retried with backoff. A genuine upstream release fails every attempt.
+const ATTEMPTS = 4;
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function fetchPinned(name, expected) {
+  const failures = [];
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    if (attempt > 1) await sleep(2000 * 2 ** (attempt - 2));
+    const res = await fetch(`${BASE}/${name}?ver=${PLUGIN_VERSION}`, { headers: { 'cache-control': 'no-cache' } });
+    const body = Buffer.from(await res.arrayBuffer());
+    const actual = createHash('sha256').update(body).digest('hex');
+    if (res.ok && actual === expected) return { body, actual };
+    // Enough to tell a challenge/error page from a real new build.
+    const preview = body.subarray(0, 120).toString('utf8').replace(/\s+/g, ' ');
+    failures.push(`#${attempt}: HTTP ${res.status} ${res.headers.get('content-type') ?? '?'} ${body.length} B sha256 ${actual.slice(0, 12)} "${preview}"`);
+    console.warn(`retry ${name} ${failures.at(-1)}`);
   }
+  throw new Error(`${name}: never matched pinned sha256 ${expected} after ${ATTEMPTS} attempts.\n  ${failures.join('\n  ')}\nIf upstream really changed, re-pin deliberately.`);
+}
+
+for (const [name, expected] of Object.entries(FILES)) {
+  const { body, actual } = await fetchPinned(name, expected);
   await writeFile(join(out, name), body);
   console.log(`ok ${name} ${actual.slice(0, 12)}`);
 }

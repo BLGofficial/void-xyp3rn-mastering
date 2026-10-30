@@ -9,9 +9,13 @@ const TAPS = 12;
 
 export interface TruePeakDetector {
   /** Push one frame; returns the largest |sample or inter-sample estimate| across channels. */
-  push(frame: Float64Array): number;
+  push(frame: ArrayLike<number>): number;
   /** Running maximum per channel since creation. */
   peaks: Float64Array;
+  /** Flush the interpolator with silence so the final samples' inter-sample peaks are seen. */
+  finish(): void;
+  /** Largest peak across all channels so far (linear). */
+  maximum(): number;
 }
 
 /** Latency of the interpolator as seen by a lookahead limiter (one full FIR span). */
@@ -23,25 +27,31 @@ export function truePeakDetector(channels: number): TruePeakDetector {
   const history = Array.from({ length: channels }, () => new Float64Array(TAPS * 2));
   const peaks = new Float64Array(channels);
   let cursor = 0;
+  const push = (frame: ArrayLike<number>): number => {
+    let framePeak = 0;
+    for (let c = 0; c < channels; c++) {
+      const ring = history[c]!, x = frame[c]!;
+      if (!Number.isFinite(x)) throw new Error('Non-finite metering input.');
+      ring[cursor] = ring[cursor + TAPS] = x;
+      let peak = Math.abs(x);
+      for (const phase of PHASES) {
+        let v = 0;
+        for (let k = 0; k < TAPS; k++) v += ring[cursor + k]! * phase[k]!;
+        peak = Math.max(peak, Math.abs(v));
+      }
+      peaks[c] = Math.max(peaks[c]!, peak);
+      framePeak = Math.max(framePeak, peak);
+    }
+    cursor = (cursor + TAPS - 1) % TAPS;
+    return framePeak;
+  };
   return {
     peaks,
-    push(frame) {
-      let framePeak = 0;
-      for (let c = 0; c < channels; c++) {
-        const ring = history[c]!, x = frame[c]!;
-        if (!Number.isFinite(x)) throw new Error('Non-finite metering input.');
-        ring[cursor] = ring[cursor + TAPS] = x;
-        let peak = Math.abs(x);
-        for (const phase of PHASES) {
-          let v = 0;
-          for (let k = 0; k < TAPS; k++) v += ring[cursor + k]! * phase[k]!;
-          peak = Math.max(peak, Math.abs(v));
-        }
-        peaks[c] = Math.max(peaks[c]!, peak);
-        framePeak = Math.max(framePeak, peak);
-      }
-      cursor = (cursor + TAPS - 1) % TAPS;
-      return framePeak;
+    push,
+    finish() {
+      const zero = new Float64Array(channels);
+      for (let i = 0; i < TAPS; i++) push(zero);
     },
+    maximum: () => Math.max(...peaks),
   };
 }

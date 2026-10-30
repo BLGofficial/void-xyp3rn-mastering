@@ -58,6 +58,24 @@ export function impulse(rate: number, seconds: number, channels: number): Signal
   return out;
 }
 
+/** Steady sine on every channel at `dbfs` peak, starting at `phase` radians. */
+export function tone(rate: number, seconds: number, channels: number, hz: number, dbfs: number, phase = 0): Signal {
+  const frames = Math.round(rate * seconds), out = channelsOf(channels, frames), a = 10 ** (dbfs / 20);
+  for (let i = 0; i < frames; i++) {
+    const v = a * Math.sin((2 * Math.PI * hz * i) / rate + phase);
+    for (let c = 0; c < channels; c++) out[c]![i] = v;
+  }
+  return out;
+}
+
+/** Wrap a signal as a decoded-file buffer (Float32, as a WAV decoder would deliver). */
+export function toBuffer(signal: Signal, sampleRate: number, channelMask = 0) {
+  return {
+    sampleRate, channelMask, length: signal[0]!.length, numberOfChannels: signal.length,
+    channels: signal.map(c => Float32Array.from(c)),
+  };
+}
+
 function normalize(signal: Signal, peak: number): Signal {
   let max = 0;
   for (const ch of signal) for (const v of ch) max = Math.max(max, Math.abs(v));

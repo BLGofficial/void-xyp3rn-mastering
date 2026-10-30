@@ -1,0 +1,8 @@
+node_modules/
+coverage/
+.next/
+*.tsbuildinfo
+
+# Third-party reference engine used only as a local test oracle.
+# Unlicensed (all rights reserved): never commit. Fetch with `npm run oracle:fetch`.
+vendor/void-oracle/

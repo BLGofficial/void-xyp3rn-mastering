@@ -12,6 +12,7 @@ const PLUGIN_VERSION = '0.22.0-alpha.11';
 const FILES = {
   'void-dsp.js': '4154dd4ad1510eb340c7945c613be5410d7e0d4f5ba1e169253ac7866b9563c8',
   'void-meter.js': '4b127796828c6976866a5d9008843c08fe6d8b2e82b591e4969d1c546daa53f1',
+  'void-peak.js': '097f4314da83c2b32d3b9467bd4e7a406ad01e389a41387a59d659541baf5173',
 };
 
 const out = join(dirname(fileURLToPath(import.meta.url)), '..', 'vendor', 'void-oracle');

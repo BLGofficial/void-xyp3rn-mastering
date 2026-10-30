@@ -15,6 +15,8 @@ interface Kernel {
   retune?(p: Params, rampSamples: number): void;
   /** Offline + bypassed: keep only sample alignment. */
   align(frame: Float64Array): void;
+  /** Gain reduction applied on the last frame, dB (compressor/limiter only). */
+  reduction?(): number;
 }
 
 interface Context {
@@ -96,6 +98,7 @@ function dynamics({ rate }: Context): Kernel {
       const g = dbToGain(p.makeupDb! - envelopeDb);
       for (let c = 0; c < frame.length; c++) frame[c]! *= g;
     },
+    reduction: () => envelopeDb,
   };
 }
 
@@ -201,6 +204,7 @@ function limit({ rate, channels, initial }: Context): Kernel {
       dry.set(frame);
       for (let c = 0; c < frame.length; c++) frame[c]! *= gain;
     },
+    reduction: () => -20 * Math.log10(Math.max(1e-30, gain)),
   };
 }
 
@@ -213,6 +217,8 @@ const KERNELS: Record<ProcessorId, (ctx: Context) => Kernel> = {
 export interface Processor {
   readonly state: ProcessorState;
   readonly latency: number;
+  /** Gain reduction on the last processed frame, scaled by the bypass crossfade (dB, >= 0). */
+  readonly reductionDb: number;
   update(state: ProcessorState): void;
   process(frame: Float64Array, offline: boolean): void;
 }
@@ -229,11 +235,14 @@ export function createProcessor(state: ProcessorState, rate: number, channels: n
   const values: Params = { ...state.parameters };
   const wet = ramp(state.bypassed ? 0 : 1);
   const dry = new Float64Array(channels);
-  let current = state;
+  let current = state, reductionDb = 0;
 
   return {
     get state() {
       return current;
+    },
+    get reductionDb() {
+      return reductionDb;
     },
     latency: kernel.latency,
     update(next) {
@@ -249,6 +258,7 @@ export function createProcessor(state: ProcessorState, rate: number, channels: n
       const w = advance(wet);
       dry.set(frame);
       kernel.run(frame, values, dry);
+      if (kernel.reduction) reductionDb = kernel.reduction() * w;
       // Exact endpoints matter: wet/dry arithmetic at 0 or 1 would leave cancellation error.
       if (w === 0) frame.set(dry);
       else if (w !== 1) for (let c = 0; c < frame.length; c++) frame[c] = dry[c]! + w * (frame[c]! - dry[c]!);

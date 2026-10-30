@@ -65,7 +65,7 @@ function expectRejects(action: () => unknown, label = 'must throw') {
   let error: unknown;
   try { action(); } catch (e) { error = e; }
   expect(error, label).toBeInstanceOf(Error);
-  expect((error as Error).message).not.toMatch(/not implemented/);
+  expect((error as Error).message).not.toMatch(/\(phase \w+ stub\)/);
 }
 
 function expectRenderParity(state: ChainState, input: Signal, rate: number, options: ChainOptions = {}, automation: Automation[] = []) {

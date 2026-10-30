@@ -2,7 +2,7 @@
 // sinc phases. Deliberately a different filter from the realtime BS.1770 detector,
 // so a limiter tuned against one isn't graded by the same approximation.
 
-import { assertNotAborted, yieldToEventLoop } from './progress';
+import { assertNotAborted, codedError, yieldToEventLoop } from './progress';
 import type { AudioBufferLike, PeakInspection, ProgressOptions } from './types';
 
 const OVERSAMPLE = 16;
@@ -50,7 +50,7 @@ export async function inspectPeaks(buffer: AudioBufferLike, ceilingDbtp: number,
       let local = 0;
       for (let i = Math.max(0, start - 31); i < Math.min(channel.length, end + 32); i++) {
         const x = Math.abs(channel[i]!);
-        if (!Number.isFinite(x)) throw new Error('Final peak validation found non-finite samples.');
+        if (!Number.isFinite(x)) throw codedError('RENDER_INTEGRITY', 'Final peak validation found non-finite samples.');
         local = Math.max(local, x);
       }
       maximum = Math.max(maximum, local);

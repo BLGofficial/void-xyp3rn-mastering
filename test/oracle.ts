@@ -42,6 +42,30 @@ export interface OraclePeak {
   inspect(buffer: AudioBufferLike, ceilingDbtp: number, options?: ProgressOptions): Promise<PeakInspection>;
 }
 
+// Engine-level oracle surfaces are typed against our own public types: parity means same shape.
+type E = typeof import('../lib/engine');
+export interface OracleEngine {
+  VERSION: string;
+  MAX_SAMPLES: number;
+  parseWav: E['parseWav'];
+  memoryPlan: E['memoryPlan'];
+  preflightWav: E['preflightWav'];
+  createBuffer: E['createBuffer'];
+  decodeWav: E['decodeWav'];
+  encodeWav: E['encodeWav'];
+  analyze: E['analyzeTrack'];
+  renderChain: E['renderChain'];
+  measureTruePeak: E['measureTruePeak'];
+  protectTruePeak: E['protectTruePeak'];
+  verifyPeak: E['verifyPeak'];
+  Safety: { VERSION: string; limits: E['safetyLimits']; evaluate: E['evaluateSafety']; assertIntegrity: E['assertIntegrity'] };
+}
+export interface OracleTarget {
+  TOLERANCE: number;
+  render: E['renderToTarget'];
+}
+
+export const ORACLE_ENGINE_VERSION = '0.22.0-alpha.8';
 export const ORACLE_DSP_VERSION = '0.11.0-dev.1';
 export const ORACLE_METER_VERSION = '0.5.0-dev.1';
 export const ORACLE_PEAK_VERSION = '1.0.0-alpha.1';
@@ -62,3 +86,5 @@ function load<T>(file: string): T {
 export const loadOracle = () => load<OracleDsp>('void-dsp.js');
 export const loadMeterOracle = () => load<OracleMeter>('void-meter.js');
 export const loadPeakOracle = () => load<OraclePeak>('void-peak.js');
+export const loadEngineOracle = () => load<OracleEngine>('void-engine.js');
+export const loadTargetOracle = () => load<OracleTarget>('void-target.js');

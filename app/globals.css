@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  accent-color: #facd68;
+}
+
+html,
+body {
+  background: #080808;
+}
+
+::selection {
+  background: #facd68;
+  color: #080808;
+}
+
+/* Native range input, brand-styled. The filled portion is driven by
+   --slider-progress set from JS (WebKit has no progress pseudo-element). */
+@layer components {
+  .xr-range {
+    --slider-track-size: 4px;
+    --slider-thumb-size: 14px;
+    --slider-track-color: #222222;
+    --slider-fill-color: #facd68;
+    --slider-progress: 50%;
+    appearance: none;
+    inline-size: 100%;
+    block-size: 1.75rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  /* Bypassed module: controls stay live but read as inactive. */
+  .xr-off .xr-range {
+    --slider-fill-color: #444444;
+  }
+  .xr-range:disabled {
+    --slider-fill-color: #444444;
+    cursor: not-allowed;
+  }
+  /* Vendor pseudo-elements must stay in separate rules: an unknown one drops the whole rule. */
+  .xr-range::-webkit-slider-runnable-track {
+    block-size: var(--slider-track-size);
+    border: 0;
+    border-radius: 0;
+    background: linear-gradient(to right, var(--slider-fill-color) var(--slider-progress), var(--slider-track-color) var(--slider-progress));
+  }
+  .xr-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    inline-size: var(--slider-thumb-size);
+    block-size: var(--slider-thumb-size);
+    margin-block-start: calc((var(--slider-track-size) - var(--slider-thumb-size)) / 2);
+    border: 2px solid #080808;
+    border-radius: 0;
+    background: var(--slider-fill-color);
+  }
+  .xr-range::-moz-range-track {
+    block-size: var(--slider-track-size);
+    border: 0;
+    background: var(--slider-track-color);
+  }
+  .xr-range::-moz-range-progress {
+    block-size: var(--slider-track-size);
+    background: var(--slider-fill-color);
+  }
+  .xr-range::-moz-range-thumb {
+    inline-size: var(--slider-thumb-size);
+    block-size: var(--slider-thumb-size);
+    border: 2px solid #080808;
+    border-radius: 0;
+    background: var(--slider-fill-color);
+  }
+  .xr-range:focus-visible {
+    outline: 2px solid #facd68;
+    outline-offset: 2px;
+  }
+
+  .xr-label {
+    @apply font-mono text-[11px] uppercase tracking-label text-muted;
+  }
+  .xr-panel {
+    @apply border border-line-card bg-panel;
+  }
+  .xr-button {
+    @apply inline-flex items-center justify-center gap-2 border border-line-card bg-surface px-4 py-2 font-mono text-xs uppercase tracking-label text-cloud transition-colors hover:border-gold-dim hover:text-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:text-muted disabled:hover:border-line-card;
+  }
+  .xr-button-primary {
+    @apply inline-flex items-center justify-center gap-2 bg-gold px-5 py-2.5 font-mono text-xs font-bold uppercase tracking-label text-studio transition-colors hover:bg-gold-dim focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:bg-surface disabled:text-muted;
+  }
+  .xr-select {
+    @apply w-full border border-line-card bg-surface px-3 py-2 font-mono text-xs text-cloud focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-gold;
+  }
+}

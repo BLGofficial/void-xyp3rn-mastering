@@ -1,0 +1,59 @@
+// Messages between the UI thread, the engine Web Worker and the AudioWorklet.
+// Plain data only: everything here must survive structured cloning.
+
+import type { ChainState } from '../lib/dsp';
+import type { SafetyResult, TargetResult, TrackMetrics, WavFormat, WavInfo } from '../lib/engine';
+import type { MeterReadings } from '../lib/meter';
+
+export type EngineRequest =
+  | { type: 'load'; file: File }
+  | { type: 'render'; state: ChainState }
+  | { type: 'export'; format: WavFormat; dither: boolean };
+
+export interface LoadResult {
+  metadata: WavInfo;
+  sampleRate: number;
+  channels: Float32Array[];
+  metrics: TrackMetrics;
+}
+
+export interface RenderResult {
+  state: ChainState;
+  metrics: TrackMetrics;
+  targetResult: TargetResult | null;
+  safety: SafetyResult;
+}
+
+export interface ExportResult {
+  bytes: ArrayBuffer;
+  /** Safety re-checked for the chosen PCM format (overs would clip). */
+  safety: SafetyResult;
+}
+
+export type EngineReply =
+  | { id: number; kind: 'status'; message: string }
+  | { id: number; kind: 'progress'; fraction: number }
+  | { id: number; kind: 'done'; result: LoadResult | RenderResult | ExportResult }
+  | { id: number; kind: 'error'; code: string; message: string };
+
+/** UI -> worklet. */
+export type WorkletMessage =
+  | { type: 'state'; state: ChainState }
+  | { type: 'source'; enabled: boolean }
+  | { type: 'match'; enabled: boolean }
+  | { type: 'reset' };
+
+export interface LiveMeters {
+  master: MeterReadings;
+  source: MeterReadings;
+  /** Total compressor + limiter gain reduction on the last block, dB. */
+  reductionDb: number;
+  /** Gain currently applied to the source path for a loudness-matched comparison, dB. */
+  matchGainDb: number;
+}
+
+/** worklet -> UI. */
+export type WorkletEvent = { type: 'meters'; meters: LiveMeters } | { type: 'error'; message: string };
+
+export const WORKLET_NAME = 'xyp3rn-chain';
+export const WORKLET_URL = '/worklets/chain-processor.js';

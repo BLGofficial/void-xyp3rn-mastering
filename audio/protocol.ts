@@ -1,6 +1,7 @@
 // Messages between the UI thread, the engine Web Worker and the AudioWorklet.
 // Plain data only: everything here must survive structured cloning.
 
+import type { Intention } from '../lib/auto';
 import type { ChainState } from '../lib/dsp';
 import type { SafetyResult, TargetResult, TrackMetrics, WavFormat, WavInfo } from '../lib/engine';
 import type { MeterReadings } from '../lib/meter';
@@ -8,6 +9,7 @@ import type { MeterReadings } from '../lib/meter';
 export type EngineRequest =
   | { type: 'load'; file: File }
   | { type: 'render'; state: ChainState }
+  | { type: 'auto'; intention: Intention; intensity: number | null; loudnessTarget: number | null; renderSettings: ChainState }
   | { type: 'export'; format: WavFormat; dither: boolean };
 
 export interface LoadResult {
@@ -24,6 +26,11 @@ export interface RenderResult {
   safety: SafetyResult;
 }
 
+/** An automatic master: rendered and measured like a manual render, plus its reasoning. */
+export interface AutoResult extends RenderResult {
+  notes: string[];
+}
+
 export interface ExportResult {
   bytes: ArrayBuffer;
   /** Safety re-checked for the chosen PCM format (overs would clip). */
@@ -33,7 +40,7 @@ export interface ExportResult {
 export type EngineReply =
   | { id: number; kind: 'status'; message: string }
   | { id: number; kind: 'progress'; fraction: number }
-  | { id: number; kind: 'done'; result: LoadResult | RenderResult | ExportResult }
+  | { id: number; kind: 'done'; result: LoadResult | RenderResult | AutoResult | ExportResult }
   | { id: number; kind: 'error'; code: string; message: string };
 
 /** UI -> worklet. */

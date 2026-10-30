@@ -65,6 +65,27 @@ export interface OracleTarget {
   render: E['renderToTarget'];
 }
 
+type A = typeof import('../lib/auto');
+export interface OracleAuto {
+  VERSION: string;
+  intentions: A['INTENTIONS'];
+  tones: A['TONES'];
+  suggest: A['suggest'];
+  decide: A['decide'];
+  intent: A['intent'];
+  adapt: A['adapt'];
+  toneProposal: A['toneProposal'];
+  loudnessTarget: A['withLoudnessTarget'];
+  safety: A['safetyCodes'];
+  renderProposal: A['renderProposal'];
+  master: A['master'];
+  comparisonGains: A['comparisonGains'];
+}
+export interface OracleAI {
+  profile: A['tonalProfile'];
+}
+
+export const ORACLE_AUTO_VERSION = '0.22.0-alpha.8';
 export const ORACLE_ENGINE_VERSION = '0.22.0-alpha.8';
 export const ORACLE_DSP_VERSION = '0.11.0-dev.1';
 export const ORACLE_METER_VERSION = '0.5.0-dev.1';
@@ -88,3 +109,5 @@ export const loadMeterOracle = () => load<OracleMeter>('void-meter.js');
 export const loadPeakOracle = () => load<OraclePeak>('void-peak.js');
 export const loadEngineOracle = () => load<OracleEngine>('void-engine.js');
 export const loadTargetOracle = () => load<OracleTarget>('void-target.js');
+export const loadAutoOracle = () => load<OracleAuto>('void-auto.js');
+export const loadAiOracle = () => load<OracleAI>('void-ai.js');

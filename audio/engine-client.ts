@@ -1,6 +1,7 @@
+import type { Intention } from '../lib/auto';
 import type { ChainState } from '../lib/dsp';
 import type { WavFormat } from '../lib/engine';
-import type { EngineReply, EngineRequest, ExportResult, LoadResult, RenderResult } from './protocol';
+import type { AutoResult, EngineReply, EngineRequest, ExportResult, LoadResult, RenderResult } from './protocol';
 
 export interface EngineCallbacks {
   onStatus?: (message: string) => void;
@@ -17,6 +18,8 @@ export class EngineFailure extends Error {
 export interface EngineClient {
   load(file: File, cb?: EngineCallbacks): Promise<LoadResult>;
   render(state: ChainState, cb?: EngineCallbacks): Promise<RenderResult>;
+  /** Propose, render and safety-check an automatic master under the user's current output settings. */
+  auto(intention: Intention, intensity: number | null, loudnessTarget: number | null, renderSettings: ChainState, cb?: EngineCallbacks): Promise<AutoResult>;
   exportWav(format: WavFormat, dither: boolean, cb?: EngineCallbacks): Promise<ExportResult>;
   dispose(): void;
 }
@@ -53,6 +56,8 @@ export function createEngineClient(): EngineClient {
   return {
     load: (file, cb) => call<LoadResult>({ type: 'load', file }, cb),
     render: (state, cb) => call<RenderResult>({ type: 'render', state }, cb),
+    auto: (intention, intensity, loudnessTarget, renderSettings, cb) =>
+      call<AutoResult>({ type: 'auto', intention, intensity, loudnessTarget, renderSettings }, cb),
     exportWav: (format, dither, cb) => call<ExportResult>({ type: 'export', format, dither }, cb),
     dispose: () => worker.terminate(),
   };

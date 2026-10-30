@@ -17,6 +17,9 @@ const FILES = {
   'void-safety.js': '9378a357a2cd28764d578d0129e1819c92f9a45c236a6b05cdb25c51114ff5b9',
   'void-engine.js': '0cb67f00f5e8c88442f1080fa7b73cd0976c4719f5d2789e2239c7d223f68db4',
   'void-target.js': 'f6bdc6e33252ddaa91cd0bb6c2c6b29d9d32b18856cdab600acf404b93e59361',
+  'void-auto.js': 'df5dcdb2a466717c22680093b19aa8a9d7644a033451bfa62c1b4898c609034e',
+  // Only its local tonal profile() is used; its network request path is never called.
+  'void-ai.js': '2625ae5ce387cc93cbf9cde839190b7e1f3bc4624db68f2e8908a6bad34485ce',
 };
 
 const out = join(dirname(fileURLToPath(import.meta.url)), '..', 'vendor', 'void-oracle');

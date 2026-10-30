@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createEngineClient, type EngineClient } from '@/audio/engine-client';
 import { createPlayer, type Player } from '@/audio/player';
 import type { LiveMeters, LoadResult, RenderResult } from '@/audio/protocol';
+import type { Intention } from '@/lib/auto';
 import { defaultState, type ChainState } from '@/lib/dsp';
 import type { WavFormat } from '@/lib/engine';
+import { AutoPanel } from './AutoPanel';
 import { ChainRack } from './ChainRack';
 import { Header } from './Header';
 import { OutputPanel } from './OutputPanel';
@@ -15,6 +17,8 @@ import { Panel } from './ui';
 import { Waveform } from './Waveform';
 
 type Loaded = LoadResult & { fileName: string; fileSize: number };
+/** A render is only current while the settings it was made from are unchanged. */
+type Stored = RenderResult & { key: string; notes?: string[] };
 
 /** State actually rendered: musical chain + output ceiling + optional loudness target. */
 function renderState(chain: ChainState, target: string, ceiling: number): ChainState {
@@ -23,6 +27,8 @@ function renderState(chain: ChainState, target: string, ceiling: number): ChainS
     ? { ...rest, outputCeilingDbtp: ceiling }
     : { ...rest, outputCeilingDbtp: ceiling, loudnessTarget: { targetLufs: Number(target), correctionDb: 0 } };
 }
+
+const settingsKey = (chain: ChainState, target: string, ceiling: number) => JSON.stringify(renderState(chain, target, ceiling));
 
 function download(bytes: ArrayBuffer, name: string) {
   const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
@@ -47,7 +53,9 @@ export function Studio() {
   const [ceiling, setCeiling] = useState(-1);
   const [format, setFormat] = useState<WavFormat>('pcm24');
   const [dither, setDither] = useState(true);
-  const [result, setResult] = useState<RenderResult | null>(null);
+  const [stored, setStored] = useState<Stored | null>(null);
+  const [intention, setIntention] = useState<Intention>('balanced');
+  const [autoIntensity, setAutoIntensity] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [listenSource, setListenSource] = useState(false);
@@ -71,12 +79,12 @@ export function Studio() {
     return () => cancelAnimationFrame(raf);
   }, [playing]);
 
-  // Any settings change makes the last render stale: export must match what was measured.
   useEffect(() => {
     player.current?.setState(chain);
-    setResult(null);
   }, [chain]);
-  useEffect(() => setResult(null), [target, ceiling]);
+
+  // Derived, not reset by effects: export must always match what was measured.
+  const result = stored && stored.key === settingsKey(chain, target, ceiling) ? stored : null;
 
   const fail = (e: unknown) => {
     setError((e as Error).message);
@@ -85,7 +93,7 @@ export function Studio() {
 
   const onFile = useCallback(async (file: File) => {
     if (!engine.current) return;
-    setBusy(true); setError(null); setResult(null); setMeters(null);
+    setBusy(true); setError(null); setStored(null); setMeters(null);
     player.current?.dispose(); player.current = null; setPlaying(false); setPosition(0);
     try {
       const loaded = await engine.current.load(file, { onStatus: setStatus, onProgress: setProgress });
@@ -117,8 +125,29 @@ export function Studio() {
     if (!engine.current) return;
     setBusy(true); setError(null);
     try {
-      setResult(await engine.current.render(renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress }));
+      const r = await engine.current.render(renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress });
+      setStored({ ...r, key: settingsKey(chain, target, ceiling) });
       setStatus('Engine: rendered');
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false); setProgress(null);
+    }
+  };
+
+  const runAuto = async () => {
+    if (!engine.current) return;
+    setBusy(true); setError(null);
+    try {
+      const r = await engine.current.auto(intention, autoIntensity, target === 'off' ? null : Number(target), renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress });
+      // The proposal becomes the editable chain; output-stage settings stay in the Output panel.
+      const { loudnessTarget: _t, ...musical } = r.state;
+      const nextChain: ChainState = { ...musical, outputCeilingDbtp: null };
+      const nextCeiling = r.state.outputCeilingDbtp ?? ceiling;
+      setChain(nextChain);
+      setCeiling(nextCeiling);
+      setStored({ ...r, key: settingsKey(nextChain, target, nextCeiling) });
+      setStatus('Engine: auto master ready');
     } catch (e) {
       fail(e);
     } finally {
@@ -177,7 +206,11 @@ export function Studio() {
             <ChainRack state={chain} onChange={setChain} />
           </Panel>
         </div>
-        <aside className="lg:sticky lg:top-4 lg:self-start">
+        <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+          <AutoPanel
+            intention={intention} onIntention={setIntention} intensity={autoIntensity} onIntensity={setAutoIntensity}
+            canRun={!!source} busy={busy} onRun={runAuto} notes={result?.notes ?? null}
+          />
           <OutputPanel
             target={target} onTarget={setTarget} ceiling={ceiling} onCeiling={setCeiling} format={format} onFormat={setFormat}
             dither={dither} onDither={setDither} canRender={!!source} busy={busy} progress={progress} onRender={render} result={result} onExport={exportWav}

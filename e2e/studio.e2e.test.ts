@@ -92,6 +92,28 @@ describe('XYP3RN MASTERING studio', () => {
     expect(metrics.loudness.truePeakDbtp!).toBeLessThanOrEqual(-1 + 0.05);
   });
 
+  it('suggests an automatic master, applies it to the chain and keeps the user in control', async () => {
+    await page.getByTestId('target-select').selectOption('-14');
+    await page.getByTestId('auto-intention').selectOption('balanced');
+    await page.getByTestId('auto-run').click();
+    // The previous manual render may still be current; wait for the auto result itself.
+    await page.getByTestId('auto-notes').waitFor({ timeout: 180_000 });
+    expect(await page.getByTestId('report-status').textContent()).toMatch(/reached/i);
+    expect(Math.abs((await numberIn('report-lufs')) + 14)).toBeLessThanOrEqual(0.2);
+    // The proposal is explained and lands in the editable chain: the limiter is now on.
+    expect(await page.getByTestId('auto-notes').locator('li').count()).toBeGreaterThanOrEqual(5);
+    const limiter = page.getByRole('article', { name: 'Brickwall Limiter' });
+    await expect(limiter.getByRole('button', { name: 'Brickwall Limiter on' }).getAttribute('aria-pressed')).resolves.toBe('true');
+    // Export ships exactly the measured auto render.
+    const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export').click()]);
+    const bytes = readFileSync((await download.path())!);
+    const { buffer } = await decodeWav(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+    expect(Math.abs((await analyzeTrack(buffer)).loudness.integratedLufs! + 14)).toBeLessThanOrEqual(0.25);
+    // Touching any control makes the result stale rather than silently exporting old audio.
+    await limiter.getByRole('button', { name: 'Brickwall Limiter on' }).click();
+    expect(await page.getByTestId('report-status').count()).toBe(0);
+  });
+
   it('raised no page or console errors', () => {
     expect(errors).toEqual([]);
   });

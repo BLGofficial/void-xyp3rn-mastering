@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChainState, ProcessorId } from '../lib/dsp';
 import * as mine from '../lib/engine';
 import type { AudioData, TrackMetrics } from '../lib/engine';
-import { expectClose } from './compare';
+import { expectClose, expectSameFailure, stripPrefix } from './compare';
 import { loadEngineOracle, loadOracle, loadTargetOracle, ORACLE_ENGINE_VERSION } from './oracle';
 import { program, sweep, tone, type Signal } from './signals';
 import { buildWav, infoList, patchAscii, type WavSpec } from './wav-fixtures';
@@ -15,34 +15,6 @@ const TOL = 1e-9;
 // Rendered audio is stored as float32: a 1e-12 float64 difference can still round
 // to a neighbouring float32 (1 ulp <= 1.2e-7 below full scale).
 const TOL_RENDER = 1.2e-7;
-
-/** Upstream codes carry a product prefix; ours are bare. Strings elsewhere are compared as-is. */
-function stripPrefix<T>(value: T): T {
-  if (typeof value === 'string') return value.replace(/^VOID_/, '') as T;
-  if (Array.isArray(value)) return value.map(stripPrefix) as T;
-  if (value && typeof value === 'object' && !ArrayBuffer.isView(value)) {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, stripPrefix(v)])) as T;
-  }
-  return value;
-}
-
-const codeOf = (e: unknown) => String((e as { code?: unknown })?.code ?? '').replace(/^VOID_/, '');
-async function capture(fn: () => unknown): Promise<unknown> {
-  try {
-    await fn();
-  } catch (e) {
-    return e;
-  }
-  return undefined;
-}
-/** Both must fail with the same (prefix-stripped) code; a stub's error never counts. */
-async function expectSameFailure(ref: () => unknown, got: () => unknown) {
-  const r = await capture(ref), g = await capture(got);
-  expect(r, 'must fail upstream').toBeInstanceOf(Error);
-  expect(g, 'must fail').toBeInstanceOf(Error);
-  expect((g as Error).message).not.toMatch(/\(phase \w+ stub\)/);
-  expect(codeOf(g), `code (upstream: ${(r as Error).message})`).toBe(codeOf(r));
-}
 
 /** Planar float32 audio built by the oracle's own allocator so both engines see identical input. */
 function audio(signal: Signal, rate: number, mask = 0): AudioData {

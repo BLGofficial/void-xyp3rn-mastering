@@ -14,10 +14,10 @@ export function Header({ status }: { status: string }) {
       </div>
       <div className="mx-auto flex max-w-[1440px] items-end gap-5 px-4 pb-2 pt-6 md:px-8">
         <XyperMark size={44} />
-        <div className="leading-none">
+        <h1 className="flex items-end gap-5 leading-none">
           <span className="block font-display text-[44px] tracking-wide text-gold">XYP3RN</span>
-        </div>
-        <span className="mb-1 font-display text-[28px] tracking-wide text-cloud">MASTERING</span>
+          <span className="mb-1 font-display text-[28px] tracking-wide text-cloud">MASTERING</span>
+        </h1>
       </div>
     </header>
   );

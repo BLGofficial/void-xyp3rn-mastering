@@ -3,7 +3,7 @@
 // encoding never block the UI thread. The source and last render stay here so
 // export re-encodes exactly what was measured.
 
-import { intent, renderProposal, tonalProfile, type TonalProfile } from '../lib/auto';
+import { intent, renderProposal, suggest, tonalProfile, withLoudnessTarget, type TonalProfile } from '../lib/auto';
 import type { ChainState } from '../lib/dsp';
 import {
   analyzeTrack, assertIntegrity, decodeWav, encodeWav, evaluateSafety, preflightWav, renderToTarget,
@@ -54,6 +54,19 @@ async function handle(id: number, request: EngineRequest) {
     spectrum ??= await tonalProfile(source);
     const options = request.loudnessTarget === null ? {} : { loudnessTarget: request.loudnessTarget };
     const proposal = intent(source, sourceMetrics, request.intention, spectrum, request.intensity, options);
+    const out = await renderProposal(source, sourceMetrics, proposal, { renderSettings: request.renderSettings, onStatus, onProgress });
+    rendered = { buffer: out.buffer, metrics: out.metrics, state: out.state };
+    const result: AutoResult = {
+      state: out.state, metrics: out.metrics, safety: out.safety!, notes: out.notes,
+      targetResult: out.targetResult.requested === null ? null : (out.targetResult as RenderResult['targetResult']),
+    };
+    return reply({ id, kind: 'done', result });
+  }
+
+  if (request.type === 'preset') {
+    onStatus(`Preset: ${request.style}...`);
+    let proposal = suggest(source, sourceMetrics, request.style, request.intensity);
+    if (request.loudnessTarget !== null) proposal = withLoudnessTarget(proposal, request.loudnessTarget);
     const out = await renderProposal(source, sourceMetrics, proposal, { renderSettings: request.renderSettings, onStatus, onProgress });
     rendered = { buffer: out.buffer, metrics: out.metrics, state: out.state };
     const result: AutoResult = {

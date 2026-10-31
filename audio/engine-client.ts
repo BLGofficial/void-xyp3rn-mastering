@@ -1,4 +1,4 @@
-import type { Intention } from '../lib/auto';
+import type { Intention, Style } from '../lib/auto';
 import type { ChainState } from '../lib/dsp';
 import type { WavFormat } from '../lib/engine';
 import type { AutoResult, EngineReply, EngineRequest, ExportResult, LoadResult, RenderResult } from './protocol';
@@ -20,6 +20,8 @@ export interface EngineClient {
   render(state: ChainState, cb?: EngineCallbacks): Promise<RenderResult>;
   /** Propose, render and safety-check an automatic master under the user's current output settings. */
   auto(intention: Intention, intensity: number | null, loudnessTarget: number | null, renderSettings: ChainState, cb?: EngineCallbacks): Promise<AutoResult>;
+  /** Apply one of the reference engine's source-aware mastering styles. */
+  preset(style: Style, intensity: number, loudnessTarget: number | null, renderSettings: ChainState, cb?: EngineCallbacks): Promise<AutoResult>;
   exportWav(format: WavFormat, dither: boolean, cb?: EngineCallbacks): Promise<ExportResult>;
   dispose(): void;
 }
@@ -58,6 +60,8 @@ export function createEngineClient(): EngineClient {
     render: (state, cb) => call<RenderResult>({ type: 'render', state }, cb),
     auto: (intention, intensity, loudnessTarget, renderSettings, cb) =>
       call<AutoResult>({ type: 'auto', intention, intensity, loudnessTarget, renderSettings }, cb),
+    preset: (style, intensity, loudnessTarget, renderSettings, cb) =>
+      call<AutoResult>({ type: 'preset', style, intensity, loudnessTarget, renderSettings }, cb),
     exportWav: (format, dither, cb) => call<ExportResult>({ type: 'export', format, dither }, cb),
     dispose: () => worker.terminate(),
   };

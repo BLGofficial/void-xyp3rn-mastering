@@ -76,7 +76,11 @@ describe('XYP3RN MASTERING studio', () => {
     await page.getByTestId('format-select').selectOption('pcm24');
     await page.getByTestId('dither').check();
     await page.getByTestId('render').click();
+    await page.getByTestId('render-orb').waitFor();
     await page.getByTestId('report-status').filter({ hasText: /reached|limited/i }).waitFor({ timeout: 180_000 });
+    await page.getByTestId('rendered-file-name').waitFor({ timeout: 60_000 });
+    expect(await page.getByTestId('render-orb').count()).toBe(0);
+    expect(await page.getByTestId('rendered-audio').getAttribute('src')).toMatch(/^blob:/);
     expect(await page.getByTestId('report-status').textContent()).toMatch(/reached/i);
     expect(Math.abs((await numberIn('report-lufs')) + 14)).toBeLessThanOrEqual(0.2);
 
@@ -90,6 +94,15 @@ describe('XYP3RN MASTERING studio', () => {
     // Independent re-measure of the file as delivered (after 24-bit quantization + dither).
     expect(Math.abs(metrics.loudness.integratedLufs! + 14)).toBeLessThanOrEqual(0.25);
     expect(metrics.loudness.truePeakDbtp!).toBeLessThanOrEqual(-1 + 0.05);
+  });
+
+  it('renders the reference-backed mastering presets into playable files', async () => {
+    await page.getByTestId('preset-warm').click();
+    await page.getByTestId('render-orb').waitFor();
+    await page.getByText('Engine: warm preset ready').waitFor({ timeout: 180_000 });
+    await page.getByTestId('rendered-file-name').waitFor();
+    expect(await page.getByTestId('render-orb').count()).toBe(0);
+    expect(await page.getByTestId('auto-notes').locator('li').count()).toBeGreaterThanOrEqual(5);
   });
 
   it('suggests an automatic master, applies it to the chain and keeps the user in control', async () => {

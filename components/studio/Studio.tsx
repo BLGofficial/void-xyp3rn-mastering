@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createEngineClient, type EngineClient } from '@/audio/engine-client';
 import { createPlayer, type Player } from '@/audio/player';
-import type { LiveMeters, LoadResult, RenderResult } from '@/audio/protocol';
-import type { Intention } from '@/lib/auto';
+import type { AutoResult, LiveMeters, LoadResult, RenderResult } from '@/audio/protocol';
+import type { Intention, Style } from '@/lib/auto';
 import { defaultState, type ChainState } from '@/lib/dsp';
 import type { WavFormat } from '@/lib/engine';
 import { AutoPanel } from './AutoPanel';
 import { ChainRack } from './ChainRack';
 import { Header } from './Header';
-import { OutputPanel } from './OutputPanel';
+import { OutputPanel, type RenderedFile } from './OutputPanel';
 import { SourcePanel } from './SourcePanel';
 import { Transport } from './Transport';
 import { Panel } from './ui';
@@ -19,6 +19,7 @@ import { Waveform } from './Waveform';
 type Loaded = LoadResult & { fileName: string; fileSize: number };
 /** A render is only current while the settings it was made from are unchanged. */
 type Stored = RenderResult & { key: string; notes?: string[] };
+type StoredFile = RenderedFile & { key: string };
 
 /** State actually rendered: musical chain + output ceiling + optional loudness target. */
 function renderState(chain: ChainState, target: string, ceiling: number): ChainState {
@@ -29,23 +30,17 @@ function renderState(chain: ChainState, target: string, ceiling: number): ChainS
 }
 
 const settingsKey = (chain: ChainState, target: string, ceiling: number) => JSON.stringify(renderState(chain, target, ceiling));
-
-function download(bytes: ArrayBuffer, name: string) {
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
-  const a = Object.assign(document.createElement('a'), { href: url, download: name });
-  document.body.append(a);
-  a.click();
-  a.remove();
-  // Give the browser a tick to start the download before revoking.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+const artifactKey = (chain: ChainState, target: string, ceiling: number, format: WavFormat, dither: boolean) =>
+  `${settingsKey(chain, target, ceiling)}|${format}|${dither}`;
 
 export function Studio() {
   const engine = useRef<EngineClient | null>(null);
   const player = useRef<Player | null>(null);
+  const studio = useRef<HTMLElement | null>(null);
   const [status, setStatus] = useState('Engine: local');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [rendering, setRendering] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [source, setSource] = useState<Loaded | null>(null);
   const [chain, setChain] = useState<ChainState>(() => defaultState());
@@ -54,6 +49,7 @@ export function Studio() {
   const [format, setFormat] = useState<WavFormat>('pcm24');
   const [dither, setDither] = useState(true);
   const [stored, setStored] = useState<Stored | null>(null);
+  const [renderedFile, setRenderedFile] = useState<StoredFile | null>(null);
   const [intention, setIntention] = useState<Intention>('balanced');
   const [autoIntensity, setAutoIntensity] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -61,6 +57,7 @@ export function Studio() {
   const [listenSource, setListenSource] = useState(false);
   const [match, setMatch] = useState(true);
   const [meters, setMeters] = useState<LiveMeters | null>(null);
+  const [introReady, setIntroReady] = useState(false);
 
   useEffect(() => {
     engine.current = createEngineClient();
@@ -68,6 +65,22 @@ export function Studio() {
       engine.current?.dispose();
       player.current?.dispose();
     };
+  }, []);
+
+  useEffect(() => () => {
+    if (renderedFile) URL.revokeObjectURL(renderedFile.url);
+  }, [renderedFile]);
+
+  useEffect(() => {
+    const node = studio.current;
+    if (!node || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry?.isIntersecting) return;
+      setIntroReady(true);
+      observer.disconnect();
+    }, { threshold: 0.15 });
+    observer.observe(node);
+    return () => observer.disconnect();
   }, []);
 
   // Playhead: poll the audio clock only while playing.
@@ -85,6 +98,7 @@ export function Studio() {
 
   // Derived, not reset by effects: export must always match what was measured.
   const result = stored && stored.key === settingsKey(chain, target, ceiling) ? stored : null;
+  const currentRenderedFile = renderedFile?.key === artifactKey(chain, target, ceiling, format, dither) ? renderedFile : null;
 
   const fail = (e: unknown) => {
     setError((e as Error).message);
@@ -93,7 +107,7 @@ export function Studio() {
 
   const onFile = useCallback(async (file: File) => {
     if (!engine.current) return;
-    setBusy(true); setError(null); setStored(null); setMeters(null);
+    setBusy(true); setError(null); setStored(null); setRenderedFile(null); setMeters(null);
     player.current?.dispose(); player.current = null; setPlaying(false); setPosition(0);
     try {
       const loaded = await engine.current.load(file, { onStatus: setStatus, onProgress: setProgress });
@@ -122,52 +136,68 @@ export function Studio() {
   };
 
   const render = async () => {
-    if (!engine.current) return;
-    setBusy(true); setError(null);
+    if (!engine.current || !source) return;
+    setBusy(true); setRendering(true); setError(null); setRenderedFile(null);
     try {
       const r = await engine.current.render(renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress });
       setStored({ ...r, key: settingsKey(chain, target, ceiling) });
-      setStatus('Engine: rendered');
+      await prepareRenderedFile(chain, ceiling);
+      setStatus('Engine: rendered file ready');
     } catch (e) {
       fail(e);
     } finally {
-      setBusy(false); setProgress(null);
+      setBusy(false); setRendering(false); setProgress(null);
     }
+  };
+
+  const prepareRenderedFile = async (nextChain: ChainState, nextCeiling: number) => {
+    if (!engine.current || !source) return;
+    const { bytes } = await engine.current.exportWav(format, dither, { onStatus: setStatus });
+    const base = source.fileName.replace(/\.[^.]+$/, '');
+    const tag = target === 'off' ? 'master' : `${target}LUFS`;
+    const name = `${base}_XYP3RN_${tag}_${format}.wav`;
+    setRenderedFile({
+      key: artifactKey(nextChain, target, nextCeiling, format, dither),
+      name,
+      url: URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' })),
+      size: bytes.byteLength,
+    });
+  };
+
+  const acceptAutomaticResult = async (r: AutoResult, readyStatus: string) => {
+    const { loudnessTarget: _t, ...musical } = r.state;
+    const nextChain: ChainState = { ...musical, outputCeilingDbtp: null };
+    const nextCeiling = r.state.outputCeilingDbtp ?? ceiling;
+    setChain(nextChain);
+    setCeiling(nextCeiling);
+    setStored({ ...r, key: settingsKey(nextChain, target, nextCeiling) });
+    await prepareRenderedFile(nextChain, nextCeiling);
+    setStatus(readyStatus);
   };
 
   const runAuto = async () => {
     if (!engine.current) return;
-    setBusy(true); setError(null);
+    setBusy(true); setRendering(true); setError(null); setRenderedFile(null);
     try {
       const r = await engine.current.auto(intention, autoIntensity, target === 'off' ? null : Number(target), renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress });
-      // The proposal becomes the editable chain; output-stage settings stay in the Output panel.
-      const { loudnessTarget: _t, ...musical } = r.state;
-      const nextChain: ChainState = { ...musical, outputCeilingDbtp: null };
-      const nextCeiling = r.state.outputCeilingDbtp ?? ceiling;
-      setChain(nextChain);
-      setCeiling(nextCeiling);
-      setStored({ ...r, key: settingsKey(nextChain, target, nextCeiling) });
-      setStatus('Engine: auto master ready');
+      await acceptAutomaticResult(r, 'Engine: auto master ready');
     } catch (e) {
       fail(e);
     } finally {
-      setBusy(false); setProgress(null);
+      setBusy(false); setRendering(false); setProgress(null);
     }
   };
 
-  const exportWav = async () => {
-    if (!engine.current || !source) return;
-    setBusy(true); setError(null);
+  const runPreset = async (style: Style) => {
+    if (!engine.current) return;
+    setBusy(true); setRendering(true); setError(null); setRenderedFile(null);
     try {
-      const { bytes } = await engine.current.exportWav(format, dither, { onStatus: setStatus });
-      const base = source.fileName.replace(/\.[^.]+$/, '');
-      const tag = target === 'off' ? 'master' : `${target}LUFS`;
-      download(bytes, `${base}_XYP3RN_${tag}_${format}.wav`);
-      setStatus('Engine: exported');
+      const r = await engine.current.preset(style, 50, target === 'off' ? null : Number(target), renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress });
+      await acceptAutomaticResult(r, `Engine: ${style} preset ready`);
     } catch (e) {
       fail(e);
     } finally {
-      setBusy(false);
+      setBusy(false); setRendering(false); setProgress(null);
     }
   };
 
@@ -175,7 +205,7 @@ export function Studio() {
   return (
     <div className="min-h-screen">
       <Header status={status} />
-      <main className="mx-auto grid max-w-[1440px] gap-4 px-4 pb-10 pt-4 md:px-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <main ref={studio} className={`mx-auto grid max-w-[1440px] gap-4 px-4 pb-10 pt-4 md:px-8 lg:grid-cols-[minmax(0,1fr)_360px] ${introReady ? 'xr-studio-intro' : ''}`}>
         <div className="min-w-0 space-y-4">
           {!source && (
             <p className="max-w-2xl text-sm text-ash">
@@ -209,16 +239,17 @@ export function Studio() {
         <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
           <AutoPanel
             intention={intention} onIntention={setIntention} intensity={autoIntensity} onIntensity={setAutoIntensity}
-            canRun={!!source} busy={busy} onRun={runAuto} notes={result?.notes ?? null}
+            canRun={!!source} busy={busy} onRun={runAuto} onPreset={runPreset} notes={result?.notes ?? null}
           />
           <OutputPanel
             target={target} onTarget={setTarget} ceiling={ceiling} onCeiling={setCeiling} format={format} onFormat={setFormat}
-            dither={dither} onDither={setDither} canRender={!!source} busy={busy} progress={progress} onRender={render} result={result} onExport={exportWav}
+            dither={dither} onDither={setDither} canRender={!!source} busy={busy} rendering={rendering} progress={progress}
+            onRender={render} result={result} renderedFile={currentRenderedFile}
           />
           <p className="mt-3 font-mono text-xs uppercase tracking-label text-muted">Suggests — never decides. You keep the final call.</p>
         </aside>
       </main>
-      <footer className="border-t border-line bg-chrome px-4 py-2 font-mono text-xs uppercase tracking-label text-muted md:px-8">
+      <footer className="xr-glass border-t border-line px-4 py-2 font-mono text-xs uppercase tracking-label text-muted md:px-8">
         XYP3RN Tech · Local processing · No audio leaves the machine
       </footer>
     </div>

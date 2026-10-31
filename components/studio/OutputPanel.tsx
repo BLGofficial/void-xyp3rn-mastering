@@ -5,6 +5,12 @@ import type { WavFormat } from '@/lib/engine';
 import { num } from './format';
 import { Panel, Readout } from './ui';
 
+export interface RenderedFile {
+  name: string;
+  url: string;
+  size: number;
+}
+
 export const TARGETS = [
   { value: 'off', label: 'Off — ceiling only' },
   { value: '-14', label: '−14 LUFS · streaming' },
@@ -45,7 +51,8 @@ const WARNING_TEXT: Record<string, string> = {
 export function OutputPanel(props: {
   target: string; onTarget: (v: string) => void; ceiling: number; onCeiling: (v: number) => void;
   format: WavFormat; onFormat: (v: WavFormat) => void; dither: boolean; onDither: (v: boolean) => void;
-  canRender: boolean; busy: boolean; progress: number | null; onRender: () => void; result: RenderResult | null; onExport: () => void;
+  canRender: boolean; busy: boolean; rendering: boolean; progress: number | null; onRender: () => void;
+  result: RenderResult | null; renderedFile: RenderedFile | null;
 }) {
   const { result } = props;
   const status = result?.targetResult?.status ?? (result ? 'rendered' : null);
@@ -80,13 +87,24 @@ export function OutputPanel(props: {
         <button type="button" data-testid="render" className="xr-button-primary w-full" disabled={!props.canRender || props.busy} onClick={props.onRender}>
           {props.busy ? 'Rendering…' : 'Render master'}
         </button>
+        {props.rendering && (
+          <div data-testid="render-orb" role="status" aria-label="Mastering in progress" className="xr-reveal relative overflow-hidden border border-gold-dim bg-black shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
+            <video autoPlay muted loop playsInline poster="/media/render-orb-poster.webp" aria-hidden className="aspect-video w-full object-cover motion-reduce:hidden">
+              <source src="/media/render-orb.mp4" type="video/mp4" />
+            </video>
+            <img src="/media/render-orb-poster.webp" alt="" aria-hidden className="hidden aspect-video w-full object-cover motion-reduce:block" />
+            <div className="absolute inset-x-0 bottom-0 bg-black/75 px-3 py-2 font-mono text-xs uppercase tracking-label text-gold">
+              Rendering master{props.progress === null ? '' : ` · ${Math.round(props.progress * 100)}%`}
+            </div>
+          </div>
+        )}
         {props.progress !== null && (
           <progress className="block h-1 w-full" max={1} value={props.progress} aria-label="Render progress" />
         )}
       </div>
 
       {result && (
-        <div className="mt-5 space-y-4 border-t border-line pt-4">
+        <div className="xr-reveal mt-5 space-y-4 border-t border-line pt-4">
           <div className="flex items-baseline justify-between">
             <span className="xr-label">Result</span>
             <span data-testid="report-status" className={`font-mono text-xs uppercase tracking-label ${status === 'limited' ? 'text-ash' : 'text-gold'}`}>{status}</span>
@@ -108,9 +126,19 @@ export function OutputPanel(props: {
               ))}
             </ul>
           )}
-          <button type="button" data-testid="export" className="xr-button w-full" disabled={props.busy} onClick={props.onExport}>
-            Export WAV
-          </button>
+          {props.renderedFile && (
+            <div className="space-y-3 border-t border-line pt-4">
+              <div>
+                <span className="xr-label">Rendered file</span>
+                <p data-testid="rendered-file-name" className="mt-1 break-all font-mono text-xs text-cloud">{props.renderedFile.name}</p>
+                <p className="font-mono text-xs text-muted">{(props.renderedFile.size / 1_000_000).toFixed(1)} MB</p>
+              </div>
+              <audio data-testid="rendered-audio" className="w-full" controls preload="metadata" src={props.renderedFile.url} />
+              <a data-testid="export" className="xr-button block w-full text-center" href={props.renderedFile.url} download={props.renderedFile.name}>
+                Download WAV
+              </a>
+            </div>
+          )}
         </div>
       )}
     </Panel>

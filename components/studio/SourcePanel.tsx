@@ -35,7 +35,7 @@ export function SourcePanel({ fileName, fileSize, metadata, metrics, busy, onFil
         onDrop={e => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files); }}
       >
         <span className="font-heading text-sm font-bold text-cloud">{fileName ?? 'Drop a WAV or browse'}</span>
-        <span className="font-mono text-[11px] text-muted">
+        <span className="font-mono text-[11px] text-ash">
           {fileSize ? bytes(fileSize) : '16/24/32-bit PCM or 32-bit float · up to 8 channels'}
         </span>
         <input

@@ -30,7 +30,7 @@ export function AutoPanel({ intention, onIntention, intensity, onIntensity, canR
           </select>
         </label>
         <Slider label="Intensity" value={effective} min={0} max={100} step={1} unit="%" onChange={onIntensity} />
-        <p className="text-xs text-muted">Dense sources cap at 35%. Uses the target and ceiling below.</p>
+        <p className="text-xs text-ash">Dense sources cap at 35%. Uses the target and ceiling below.</p>
         <button type="button" data-testid="auto-run" className="xr-button w-full" disabled={!canRun || busy} onClick={onRun}>
           {busy ? 'Working…' : 'Suggest a master'}
         </button>

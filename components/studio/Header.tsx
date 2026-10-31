@@ -4,7 +4,7 @@ import { XyperMark } from '../brand/XyperMark';
 export function Header({ status }: { status: string }) {
   return (
     <header>
-      <div className="flex items-center justify-between gap-4 border-b border-gold bg-chrome px-4 py-2 font-mono text-[10px] uppercase tracking-label text-muted md:px-8">
+      <div className="flex items-center justify-between gap-4 border-b border-gold bg-chrome px-4 py-2 font-mono text-xs uppercase tracking-label text-muted md:px-8">
         <span>XYP3RN TECH · MASTERING</span>
         <span className="flex items-center gap-2 text-gold" role="status" aria-live="polite">
           <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-gold" />

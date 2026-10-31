@@ -18,7 +18,7 @@ export function AutoPanel({ intention, onIntention, intensity, onIntensity, canR
 }) {
   const effective = intensity ?? INTENTIONS[intention].intensity;
   return (
-    <Panel title="Auto" aside={<span className="font-mono text-[11px] text-muted">Local · deterministic</span>}>
+    <Panel title="Auto" aside={<span className="font-mono text-xs text-muted">Local · deterministic</span>}>
       <div className="space-y-3">
         <label className="block">
           <span className="xr-label">Intention</span>

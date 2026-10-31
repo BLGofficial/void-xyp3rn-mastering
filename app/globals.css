@@ -87,7 +87,7 @@ body {
   }
 
   .xr-label {
-    @apply font-mono text-[11px] uppercase tracking-label text-ash;
+    @apply font-mono text-xs uppercase tracking-label text-ash;
   }
   .xr-panel {
     @apply border border-line-card bg-panel;

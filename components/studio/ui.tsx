@@ -8,7 +8,7 @@ export function Panel({ title, aside, children, className = '' }: { title: strin
   return (
     <section className={`xr-panel ${className}`} aria-label={title}>
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
-        <h2 className="font-mono text-[11px] uppercase tracking-label text-gold">{title}</h2>
+        <h2 className="font-mono text-xs uppercase tracking-label text-gold">{title}</h2>
         {aside}
       </div>
       <div className="p-4">{children}</div>
@@ -56,7 +56,7 @@ export function Toggle({ pressed, onClick, children, testId, label, disabled }: 
   return (
     <button
       type="button" aria-pressed={pressed} aria-label={label} data-testid={testId} disabled={disabled} onClick={onClick}
-      className={`min-h-11 border px-2.5 py-1 font-mono text-[11px] uppercase tracking-label transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-0 ${
+      className={`min-h-11 border px-2.5 py-1 font-mono text-xs uppercase tracking-label transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-0 ${
         pressed ? 'border-gold bg-gold text-studio' : 'border-line-card bg-surface text-ash hover:border-gold-dim hover:text-gold'
       }`}
     >

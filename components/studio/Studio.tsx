@@ -202,7 +202,7 @@ export function Studio() {
               </div>
             </Panel>
           )}
-          <Panel title="Chain" aside={<span className="font-mono text-[11px] text-muted">In signal order</span>}>
+          <Panel title="Chain" aside={<span className="font-mono text-xs text-muted">In signal order</span>}>
             <ChainRack state={chain} onChange={setChain} />
           </Panel>
         </div>
@@ -215,10 +215,10 @@ export function Studio() {
             target={target} onTarget={setTarget} ceiling={ceiling} onCeiling={setCeiling} format={format} onFormat={setFormat}
             dither={dither} onDither={setDither} canRender={!!source} busy={busy} progress={progress} onRender={render} result={result} onExport={exportWav}
           />
-          <p className="mt-3 font-mono text-[10px] uppercase tracking-label text-muted">Suggests — never decides. You keep the final call.</p>
+          <p className="mt-3 font-mono text-xs uppercase tracking-label text-muted">Suggests — never decides. You keep the final call.</p>
         </aside>
       </main>
-      <footer className="border-t border-line bg-chrome px-4 py-2 font-mono text-[10px] uppercase tracking-label text-muted md:px-8">
+      <footer className="border-t border-line bg-chrome px-4 py-2 font-mono text-xs uppercase tracking-label text-muted md:px-8">
         XYP3RN Tech · Local processing · No audio leaves the machine
       </footer>
     </div>

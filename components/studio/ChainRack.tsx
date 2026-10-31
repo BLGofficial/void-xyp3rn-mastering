@@ -24,7 +24,7 @@ function ModuleCard({ proc, onChange, onRemove }: { proc: ProcessorState; onChan
       <header className="mb-3 flex items-center justify-between gap-2">
         <h3 className={`font-heading text-sm font-bold ${proc.bypassed ? 'text-ash' : 'text-cloud'}`}>{def.name}</h3>
         <div className="flex gap-1.5">
-          {onRemove && <button type="button" onClick={onRemove} className="min-h-11 min-w-11 px-1.5 font-mono text-[11px] uppercase text-muted hover:text-gold sm:min-h-0 sm:min-w-0" aria-label={`Remove ${def.name}`}>✕</button>}
+          {onRemove && <button type="button" onClick={onRemove} className="min-h-11 min-w-11 px-1.5 font-mono text-xs uppercase text-muted hover:text-gold sm:min-h-0 sm:min-w-0" aria-label={`Remove ${def.name}`}>✕</button>}
           <Toggle pressed={!proc.bypassed} onClick={() => onChange({ ...proc, bypassed: !proc.bypassed })} label={`${def.name} on`}>
             {proc.bypassed ? 'Off' : 'On'}
           </Toggle>

@@ -4,6 +4,7 @@
 **Scope:** XYP3RN Tech product UI — the browser mastering studio
 **Source of truth:** `tailwind.config.ts`, `app/globals.css`, `app/layout.tsx`, `components/**`, `app/icon.svg`, `README.md`
 **Machine-readable companion:** [`design-tokens.css`](./design-tokens.css)
+**Visual reference:** [`styleguide.html`](./styleguide.html) — every component below rendered from the token file
 
 ---
 
@@ -853,4 +854,4 @@ These are unresolved in the source. They are recorded rather than guessed.
 
 ---
 
-*End of design system. Companion tokens: [`design-tokens.css`](./design-tokens.css).*
+*End of design system. Companion tokens: [`design-tokens.css`](./design-tokens.css). Visual reference: [`styleguide.html`](./styleguide.html).*

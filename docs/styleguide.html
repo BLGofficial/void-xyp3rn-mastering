@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>XYP3RN MASTERING — Design System Reference</title>
+    <meta name="theme-color" content="#080808" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:opsz,wght@9..40,400;9..40,500&family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./design-tokens.css" />
+    <style>
+      /* Page chrome only. Every colour, type, space, shadow and motion value
+         below resolves through design-tokens.css — nothing is hard-coded. */
+
+      *,
+      *::before,
+      *::after { box-sizing: border-box; }
+
+      html { scroll-behavior: smooth; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: var(--xr-font-body);
+        font-size: var(--xr-size-body);
+        line-height: 1.5;
+      }
+
+      a { color: inherit; text-decoration: none; }
+
+      .wrap {
+        max-width: var(--xr-max-width);
+        margin: 0 auto;
+        padding: 0 var(--xr-space-4) var(--xr-space-10);
+      }
+      @media (min-width: 768px) {
+        .wrap { padding-inline: var(--xr-space-8); }
+      }
+
+      /* ---- Chrome bar + lockup (mirrors components/studio Header) --------- */
+      .chrome {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--xr-space-4);
+        padding: var(--xr-space-2) var(--xr-space-4);
+        border-bottom: 1px solid var(--xr-gold);
+        font-family: var(--xr-font-mono);
+        font-size: var(--xr-size-label);
+        text-transform: uppercase;
+        letter-spacing: var(--xr-tracking-label);
+        color: var(--xr-muted);
+      }
+      @media (min-width: 768px) {
+        .chrome { padding-inline: var(--xr-space-8); }
+      }
+      .chrome__status {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--xr-space-2);
+        color: var(--xr-gold);
+      }
+      .chrome__dot {
+        width: 6px;
+        height: 6px;
+        border-radius: var(--xr-radius-dot);
+        background: var(--xr-gold);
+      }
+      .chrome__tagline { display: none; }
+      @media (min-width: 768px) {
+        .chrome__tagline { display: inline; }
+      }
+
+      .lockup {
+        display: flex;
+        align-items: flex-end;
+        gap: var(--xr-space-5);
+        padding-block: var(--xr-space-6) var(--xr-space-3);
+      }
+      .lockup svg { display: block; height: 44px; width: auto; }
+      .lockup h1 {
+        display: flex;
+        align-items: flex-end;
+        gap: var(--xr-space-5);
+        margin: 0;
+        font-family: var(--xr-font-display);
+        font-weight: 400;
+        line-height: 1;
+        letter-spacing: var(--xr-tracking-display);
+        text-transform: uppercase;
+      }
+      .lockup h1 span:first-child { font-size: var(--xr-size-display-lg); color: var(--xr-gold); }
+      .lockup h1 span:last-child {
+        font-size: var(--xr-size-display-sm);
+        color: var(--xr-cloud);
+        margin-bottom: 4px;
+      }
+
+      /* ---- Section frame -------------------------------------------------- */
+      section.spec {
+        margin-top: var(--xr-space-4);
+        padding: var(--xr-space-4);
+      }
+      @media (min-width: 768px) {
+        section.spec { padding: var(--xr-space-6); }
+      }
+      .spec__head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--xr-space-3);
+        padding-bottom: var(--xr-space-2);
+        border-bottom: 1px solid var(--xr-line);
+        margin-bottom: var(--xr-space-4);
+      }
+      .spec__head h2 {
+        margin: 0;
+        font-family: var(--xr-font-mono);
+        font-size: var(--xr-size-label);
+        font-weight: 400;
+        line-height: 1rem;
+        text-transform: uppercase;
+        letter-spacing: var(--xr-tracking-label);
+        color: var(--xr-gold);
+      }
+      .spec__head span {
+        font-family: var(--xr-font-mono);
+        font-size: var(--xr-size-label);
+        text-transform: uppercase;
+        letter-spacing: var(--xr-tracking-label);
+        color: var(--xr-muted);
+      }
+
+      .note { color: var(--xr-ash); font-size: var(--xr-size-body); max-width: 68ch; }
+      .note + .note { margin-top: var(--xr-space-2); }
+      .mono { font-family: var(--xr-font-mono); }
+      .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--xr-space-3); }
+      .stack { display: grid; gap: var(--xr-space-3); }
+      .grid-2 { display: grid; gap: var(--xr-space-4); }
+      @media (min-width: 768px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+
+      /* ---- Palette -------------------------------------------------------- */
+      .swatches {
+        display: grid;
+        gap: var(--xr-space-3);
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      }
+      .swatch {
+        border: 1px solid var(--xr-line-card);
+        background: var(--xr-glass-raised);
+      }
+      .swatch__chip {
+        height: 56px;
+        border-bottom: 1px solid var(--xr-line-card);
+      }
+      .swatch__meta { padding: var(--xr-space-2) var(--xr-space-3) var(--xr-space-3); }
+      .swatch__name {
+        font-family: var(--xr-font-mono);
+        font-size: var(--xr-size-label);
+        text-transform: uppercase;
+        letter-spacing: var(--xr-tracking-label);
+        color: var(--xr-cloud);
+        display: flex;
+        justify-content: space-between;
+        gap: var(--xr-space-2);
+      }
+      .swatch__name em { font-style: normal; color: var(--xr-gold); }
+      .swatch__role { font-size: var(--xr-size-label); color: var(--xr-ash); margin-top: 2px; }
+      .swatch__ratio {
+        font-family: var(--xr-font-mono);
+        font-size: var(--xr-size-label);
+        color: var(--xr-muted);
+        margin-top: var(--xr-space-2);
+        padding-top: var(--xr-space-2);
+        border-top: 1px solid var(--xr-line);
+      }
+      .swatch__ratio b { color: var(--xr-cloud); font-weight: 400; }
+      .swatch__ratio .fail { color: var(--xr-gold); }
+
+      /* ---- Type ladder ---------------------------------------------------- */
+      .type-row {
+        display: grid;
+        gap: var(--xr-space-2);
+        padding-block: var(--xr-space-3);
+        border-bottom: 1px solid var(--xr-line);
+      }
+      .type-row:last-child { border-bottom: 0; }
+      @media (min-width: 768px) {
+        .type-row { grid-template-columns: 220px 1fr; align-items: baseline; gap: var(--xr-space-4); }
+      }
+      .type-row__spec {
+        font-family: var(--xr-font-mono);
+        font-size: var(--xr-size-label);
+        text-transform: uppercase;
+        letter-spacing: var(--xr-tracking-label);
+        color: var(--xr-muted);
+      }
+      .type-row__spec b { color: var(--xr-ash); font-weight: 400; }
+      .display { font-family: var(--xr-font-display); font-size: var(--xr-size-display-lg); line-height: 1; letter-spacing: var(--xr-tracking-display); color: var(--xr-gold); margin: 0; }
+      .heading { font-family: var(--xr-font-heading); font-weight: 700; font-size: var(--xr-size-title); color: var(--xr-cloud); margin: 0; }
+      .value-lg { font-family: var(--xr-font-mono); font-size: var(--xr-size-value-lg); font-variant-numeric: tabular-nums; color: var(--xr-cloud); margin: 0; }
+      .value { font-family: var(--xr-font-mono); font-size: var(--xr-size-value); font-variant-numeric: tabular-nums; color: var(--xr-cloud); margin: 0; }
+      .value small { font-size: var(--xr-size-label); color: var(--xr-muted); margin-left: 4px; }
+      .bodycopy { color: var(--xr-ash); font-size: var(--xr-size-body); margin: 0; max-width: 60ch; }
+
+      /* ---- Readout (mirrors components/studio ui.tsx) ---------------------- */
+      .readout__label {
+        font-family: var(--xr-font-mono);
+        font-size: var(--xr-size-label);
+        text-transform: uppercase;
+        letter-spacing: var(--xr-tracking-label);
+        color: var(--xr-ash);
+      }
+      .readout__value {
+        font-family: var(--xr-font-mono);
+        font-variant-numeric: tabular-nums;
+        font-size: var(--xr-size-value);
+        color: var(--xr-cloud);
+      }
+      .readout__value.lg { font-size: var(--xr-size-value-lg); }
+      .readout__unit { font-size: var(--xr-size-label); color: var(--xr-muted); margin-left: 4px; }
+
+      /* ---- Slider rows (mirrors ui.tsx Slider) ----------------------------- */
+      .slider-row + .slider-row { margin-top: var(--xr-space-3); }
+      .slider-row__top {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--xr-space-2);
+      }
+      .slider-row__label { font-size: var(--xr-size-label); color: var(--xr-ash); }
+      .slider-row__out {
+        font-family: var(--xr-font-mono);
+        font-size: var(--xr-size-label);
+        font-variant-numeric: tabular-nums;
+        color: var(--xr-cloud);
+      }
+
+      /* ---- Module card (mirrors ChainRack ModuleCard) ---------------------- */
+      .module { border: 1px solid var(--xr-gold-dim); background: rgb(17 17 17 / 64%); padding: var(--xr-space-4); box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%); transition: transform var(--xr-smooth) var(--xr-ease), background-color var(--xr-fast) ease, box-shadow var(--xr-smooth) ease; }
+      .module--off { border-color: var(--xr-line); }
+      @media (hover: hover) and (pointer: fine) {
+        .module:hover { transform: translateY(-2px); background: rgb(20 20 20 / 78%); box-shadow: var(--xr-shadow-module-hover); }
+      }
+      .module__head { display: flex; align-items: center; justify-content: space-between; gap: var(--xr-space-2); margin-bottom: var(--xr-space-3); }
+      .module__title { font-family: var(--xr-font-heading); font-weight: 700; font-size: var(--xr-size-title); color: var(--xr-cloud); margin: 0; }
+      .module--off .module__title { color: var(--xr-ash); }
+
+      /* ---- Toggle --------------------------------------------------------- */
+      .toggle {
+        min-height: var(--xr-hit-target);
+        padding: var(--xr-space-1) 10px;
+        border: 1px solid var(--xr-line-card);
+        border-radius: var(--xr-radius);
+        background: var(--xr-surface);
+        color: var(--xr-ash);
+        font-family: var(--xr-font-mono);
+        font-size: var(--xr-size-label);
+        text-transform: uppercase;
+        letter-spacing: var(--xr-tracking-label);
+        cursor: pointer;
+        transition: color var(--xr-fast) ease, border-color var(--xr-fast) ease, background-color var(--xr-fast) ease;
+      }
+      .toggle[aria-pressed='true'] { border-color: var(--xr-gold); background: var(--xr-gold); color: var(--xr-studio); }
+      .toggle:not([aria-pressed='true']):hover { border-color: var(--xr-gold-dim); color: var(--xr-gold); }
+      .toggle:focus-visible { outline: var(--xr-focus-ring); outline-offset: var(--xr-focus-offset); }
+      .toggle:disabled { opacity: 0.4; cursor: not-allowed; }
+      @media (min-width: 640px) { .toggle { min-height: 0; } }
+
+      /* ---- Warnings, notes, alert ---------------------------------------- */
+      .warn, .notes { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+      .warn li { display: flex; gap: var(--xr-space-2); font-size: var(--xr-size-label); color: var(--xr-ash); }
+      .warn li span:first-child { color: var(--xr-gold); }
+      .notes { counter-reset: note; }
+      .notes li { display: flex; gap: var(--xr-space-2); font-size: var(--xr-size-label); color: var(--xr-ash); }
+      .notes li b {
+        color: var(--xr-gold);
+        font-family: var(--xr-font-mono);
+        font-weight: 400;
+        counter-increment: note;
+      }
+      .notes li b::before { content: counter(note, decimal-leading-zero); }
+      .alert { border: 1px solid var(--xr-gold-dim); background: var(--xr-gold-glow); padding: var(--xr-space-3) var(--xr-space-4); color: var(--xr-cloud); font-size: var(--xr-size-body); }
+
+      /* ---- Waveform strip ------------------------------------------------- */
+      .wave { height: var(--xr-waveform-height); border: 1px solid var(--xr-line); background: var(--xr-code-bg); position: relative; overflow: hidden; display: flex; align-items: center; gap: 1px; }
+      .wave__bar { flex: 1 1 0; background: #444444; }
+      .wave__master { position: absolute; inset: 0; display: flex; align-items: center; gap: 1px; opacity: 0.85; }
+      .wave__master .wave__bar { background: var(--xr-gold); }
+      .wave__playhead { position: absolute; top: 0; bottom: 0; left: 38%; width: 1px; background: var(--xr-cloud); }
+
+      /* ---- Spacing + elevation -------------------------------------------- */
+      .spacing { display: grid; gap: var(--xr-space-2); }
+      .spacing div { display: flex; align-items: center; gap: var(--xr-space-3); }
+      .spacing i { display: block; height: 10px; background: var(--xr-gold); opacity: 0.85; }
+      .spacing code { font-family: var(--xr-font-mono); font-size: var(--xr-size-label); color: var(--xr-ash); }
+
+      .elev { border: 1px solid var(--xr-line-card); background: var(--xr-glass-raised); padding: var(--xr-space-3); }
+      .elev--panel { background: var(--xr-glass); box-shadow: var(--xr-shadow-panel); }
+      .elev--module { border-color: var(--xr-gold-dim); background: rgb(17 17 17 / 64%); box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%); }
+      .elev--gold { border: 0; background: var(--xr-gold); box-shadow: var(--xr-shadow-gold); color: var(--xr-studio); }
+      .elev--media { border-color: var(--xr-gold-dim); background: var(--xr-chrome); box-shadow: var(--xr-shadow-media); }
+      .elev__tag { font-family: var(--xr-font-mono); font-size: var(--xr-size-label); text-transform: uppercase; letter-spacing: var(--xr-tracking-label); }
+
+      /* ---- Do / Don't ------------------------------------------------------ */
+      .do, .dont { border: 1px solid var(--xr-line-card); padding: var(--xr-space-4); background: var(--xr-glass-raised); }
+      .do { border-left: 2px solid var(--xr-gold); }
+      .dont { border-left: 2px solid var(--xr-muted); }
+      .do h3, .dont h3 {
+        margin: 0 0 var(--xr-space-2);
+        font-family: var(--xr-font-mono);
+        font-size: var(--xr-size-label);
+        font-weight: 400;
+        text-transform: uppercase;
+        letter-spacing: var(--xr-tracking-label);
+        color: var(--xr-gold);
+      }
+      .dont h3 { color: var(--xr-muted); }
+      .do ul, .dont ul { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; font-size: var(--xr-size-label); color: var(--xr-ash); }
+
+      footer.spec-foot {
+        margin-top: var(--xr-space-4);
+        padding: var(--xr-space-2) 0 0;
+        border-top: 1px solid var(--xr-line);
+        font-family: var(--xr-font-mono);
+        font-size: var(--xr-size-label);
+        text-transform: uppercase;
+        letter-spacing: var(--xr-tracking-label);
+        color: var(--xr-muted);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+      }
+    </style>
+  </head>
+  <body class="xr-surface-page">
+    <!-- Chrome bar: the product's only navigation. -->
+    <header class="chrome xr-glass">
+      <span>XYP3RN TECH · MASTERING</span>
+      <span class="chrome__status" role="status">
+        <span class="chrome__dot" aria-hidden="true"></span>
+        Design System v1.0
+      </span>
+      <span class="chrome__tagline">Where Music Shapes Technology</span>
+    </header>
+
+    <div class="wrap">
+      <!-- Wordmark lockup -->
+      <div class="lockup">
+        <svg viewBox="0 0 2860 2741" role="img" aria-label="XYP3RN">
+          <path
+            fill="#FACD68"
+            fill-rule="evenodd"
+            d="M2852 2741L2841 2738L1582 1477L1580 1463L1596 1443L1723 1322L1936 1107L1964 1077L1966 1063L1619 718L1449 552L1429 538L1411 546L899 1052L888 1069L894 1081L1272 1459L1276 1469L1272 1481L555 2194L92 2657L21 2732L13 2738L3 2738L0 2733L0 1557L18 1531L358 1193L466 1081L468 1073L292 901L152 755L44 649L34 633L32 19L36 9L43 6L939 6L1103 4L1147 0L1160 5L1160 17L1108 71L907 272L883 290L335 292L322 301L320 499L324 525L669 866L681 866L687 862L767 784L1419 128L1433 128L1441 134L2068 761L2163 860L2173 866L2183 866L2193 860L2528 527L2534 515L2532 303L2517 292L1977 290L1959 280L1700 21L1696 15L1698 7L1705 2L1735 6L2813 6L2820 13L2822 101L2820 635L2792 671L2400 1061L2392 1073L2392 1081L2418 1113L2538 1235L2844 1537L2858 1561L2860 2737ZM2567 2046L2570 2041L2568 1695L2564 1679L2554 1665L2398 1507L2386 1487L2382 1411L2384 1133L2382 1097L2375 1092L2361 1100L2048 1409L1994 1465L1990 1479L2557 2046ZM297 2040L807 1536L862 1481L864 1475L862 1463L501 1102L491 1098L482 1103L478 1123L474 1437L468 1493L442 1523L292 1671L288 1679L288 2035Z"
+          />
+        </svg>
+        <h1><span>XYP3RN</span><span>MASTERING</span></h1>
+      </div>
+
+      <p class="note">
+        A rendering of the system documented in
+        <a href="./design-system.md" style="color: var(--xr-gold)">design-system.md</a>, built only from
+        <span class="mono">design-tokens.css</span>. If a value looks wrong here, the token file is wrong.
+      </p>
+
+      <!-- 1. Palette ------------------------------------------------------- -->
+      <section class="spec xr-panel">
+        <div class="spec__head"><h2>01 · Palette</h2><span>One hue · three text steps</span></div>
+        <div class="swatches">
+          <div class="swatch">
+            <div class="swatch__chip" style="background: var(--xr-studio)"></div>
+            <div class="swatch__meta">
+              <div class="swatch__name"><span>studio</span><em>#080808</em></div>
+              <div class="swatch__role">Page canvas. Base under everything.</div>
+              <div class="swatch__ratio"><b>—</b> background</div>
+            </div>
+          </div>
+          <div class="swatch">
+            <div class="swatch__chip" style="background: var(--xr-panel)"></div>
+            <div class="swatch__meta">
+              <div class="swatch__name"><span>panel</span><em>#0D0D0D</em></div>
+              <div class="swatch__role">Cards, sections. Rendered as 78% glass.</div>
+              <div class="swatch__ratio"><b>—</b> surface</div>
+            </div>
+          </div>
+          <div class="swatch">
+            <div class="swatch__chip" style="background: var(--xr-surface)"></div>
+            <div class="swatch__meta">
+              <div class="swatch__name"><span>surface</span><em>#111111</em></div>
+              <div class="swatch__role">Raised UI, unpressed toggles, modules.</div>
+              <div class="swatch__ratio"><b>—</b> raised</div>
+            </div>
+          </div>
+          <div class="swatch">
+            <div class="swatch__chip" style="background: var(--xr-chrome)"></div>
+            <div class="swatch__meta">
+              <div class="swatch__name"><span>chrome</span><em>#000000</em></div>
+              <div class="swatch__role">Bars, nav, media frame.</div>
+              <div class="swatch__ratio"><b>—</b> outermost</div>
+            </div>
+          </div>
+          <div class="swatch">
+            <div class="swatch__chip" style="background: var(--xr-gold)"></div>
+            <div class="swatch__meta">
+              <div class="swatch__name"><span>gold</span><em>#FACD68</em></div>
+              <div class="swatch__role">Mark, active state, primary action, confirmed value.</div>
+              <div class="swatch__ratio">on panel <b>12.95:1</b> · AAA</div>
+            </div>
+          </div>
+          <div class="swatch">
+            <div class="swatch__chip" style="background: var(--xr-gold-dim)"></div>
+            <div class="swatch__meta">
+              <div class="swatch__name"><span>gold-dim</span><em>#C9A03E</em></div>
+              <div class="swatch__role">Press and hover fill, active module border.</div>
+              <div class="swatch__ratio">on studio <b>8.18:1</b> · AAA</div>
+            </div>
+          </div>
+          <div class="swatch">
+            <div class="swatch__chip" style="background: var(--xr-gold-glow)"></div>
+            <div class="swatch__meta">
+              <div class="swatch__name"><span>gold-glow</span><em>#2A1E00</em></div>
+              <div class="swatch__role">Alert and drag-over tint.</div>
+              <div class="swatch__ratio">cloud on it <b>13.35:1</b> · AAA</div>
+            </div>
+          </div>
+          <div class="swatch">
+            <div class="swatch__chip" style="background: var(--xr-cloud)"></div>
+            <div class="swatch__meta">
+              <div class="swatch__name"><span>cloud</span><em>#E8E8E8</em></div>
+              <div class="swatch__role">Headings, key content, values.</div>
+              <div class="swatch__ratio">on panel <b>15.86:1</b> · AAA</div>
+            </div>
+          </div>
+          <div class="swatch">
+            <div class="swatch__chip" style="background: var(--xr-ash)"></div>
+            <div class="swatch__meta">
+              <div class="swatch__name"><span>ash</span><em>#A6A6A6</em></div>
+              <div class="swatch__role">Body copy, field labels.</div>
+              <div class="swatch__ratio">on panel <b>7.98:1</b> · AAA</div>
+            </div>
+          </div>
+          <div class="swatch">
+            <div class="swatch__chip" style="background: var(--xr-muted)"></div>
+            <div class="swatch__meta">
+              <div class="swatch__name"><span>muted</span><em>#686868</em></div>
+              <div class="swatch__role">Metadata, units only — never required text.</div>
+              <div class="swatch__ratio">on panel <b>3.49:1</b> · <span class="fail">AA large only</span></div>
+            </div>
+          </div>
+          <div class="swatch">
+            <div class="swatch__chip" style="background: var(--xr-line-card)"></div>
+            <div class="swatch__meta">
+              <div class="swatch__name"><span>line-card</span><em>#343434</em></div>
+              <div class="swatch__role">Default border.</div>
+              <div class="swatch__ratio"><b>1px</b> hairline</div>
+            </div>
+          </div>
+          <div class="swatch">
+            <div class="swatch__chip" style="background: var(--xr-line)"></div>
+            <div class="swatch__meta">
+              <div class="swatch__name"><span>line</span><em>#282828</em></div>
+              <div class="swatch__role">Dividers, panel header rule.</div>
+              <div class="swatch__ratio"><b>1px</b> divider</div>
+            </div>
+          </div>
+        </div>
+        <p class="note" style="margin-top: var(--xr-space-4)">
+          No second hue exists. Amber is XYP3RN Records-only and deliberately absent; there are no
+          green, red or blue semantics — a missed target renders in <span class="mono">ash</span>, an
+          achieved one in <span class="mono">gold</span>.
+        </p>
+      </section>
+
+      <!-- 2. Type ---------------------------------------------------------- -->
+      <section class="spec xr-panel">
+        <div class="spec__head"><h2>02 · Type</h2><span>Four families · one role each</span></div>
+        <div class="type-row">
+          <div class="type-row__spec">Bebas 400 · <b>44px</b> · display</div>
+          <p class="display">XYP3RN</p>
+        </div>
+        <div class="type-row">
+          <div class="type-row__spec">Syne 700 · <b>14px</b> · heading</div>
+          <p class="heading">Glue Compressor</p>
+        </div>
+        <div class="type-row">
+          <div class="type-row__spec">Mono 400 · <b>24px</b> · value lg</div>
+          <p class="value-lg">−14.2<small>LUFS</small></p>
+        </div>
+        <div class="type-row">
+          <div class="type-row__spec">Mono 400 · <b>16px</b> · value</div>
+          <p class="value">−1.0<small>dBTP</small></p>
+        </div>
+        <div class="type-row">
+          <div class="type-row__spec">Mono 400 · <b>12px</b> · label</div>
+          <p class="xr-label" style="margin: 0">Chain · In signal order</p>
+        </div>
+        <div class="type-row">
+          <div class="type-row__spec">DM Sans 400 · <b>14px</b> · body</div>
+          <p class="bodycopy">
+            Dense sources cap at 35%. Uses the target and ceiling below. Suggests — never decides.
+            You keep the final call.
+          </p>
+        </div>
+        <p class="note" style="margin-top: var(--xr-space-4)">
+          Numbers are always mono with <span class="mono">tabular-nums</span>, a typographic minus
+          <span class="mono">−</span> (U+2212), and a trailing unit. Missing values render an em dash
+          <span class="mono">—</span>; infinities render <span class="mono">∞</span>.
+        </p>
+      </section>
+
+      <!-- 3. Controls ------------------------------------------------------ -->
+      <section class="spec xr-panel">
+        <div class="spec__head"><h2>03 · Controls</h2><span>Radius 0 · 2px gold focus</span></div>
+        <div class="grid-2">
+          <div class="stack">
+            <div class="xr-label">Buttons</div>
+            <div class="row">
+              <button class="xr-button-primary">Render master</button>
+              <button class="xr-button">Suggest a master</button>
+              <button class="xr-button" disabled>Working…</button>
+            </div>
+            <div class="row" style="margin-top: var(--xr-space-2)">
+              <button class="toggle" aria-pressed="true">On</button>
+              <button class="toggle" aria-pressed="false">Off</button>
+              <button class="toggle" aria-pressed="false">Peak</button>
+              <button class="toggle" aria-pressed="true">Hybrid</button>
+              <button class="toggle" aria-pressed="false" disabled>4x Studio</button>
+            </div>
+            <label style="display: block; margin-top: var(--xr-space-2)">
+              <span class="xr-label">Loudness target</span>
+              <select class="xr-select" style="margin-top: var(--xr-space-1)">
+                <option>−14 LUFS · streaming</option>
+                <option>−9 LUFS · club</option>
+                <option>−23 LUFS · broadcast (R128)</option>
+              </select>
+            </label>
+            <label style="display: flex; align-items: center; gap: var(--xr-space-2); font-size: var(--xr-size-label); color: var(--xr-ash)">
+              <input type="checkbox" checked style="height: 16px; width: 16px" />
+              TPDF dither on PCM export
+            </label>
+            <div class="alert" role="alert">Limiter working past 4 dB. Back off input or target.</div>
+          </div>
+
+          <div class="stack">
+            <div class="xr-label">Module · active and bypassed</div>
+            <article class="module" style="border-color: var(--xr-gold-dim)">
+              <div class="module__head">
+                <h3 class="module__title">Brickwall Limiter</h3>
+                <button class="toggle" aria-pressed="true">On</button>
+              </div>
+              <div class="slider-row">
+                <div class="slider-row__top">
+                  <span class="slider-row__label">Ceiling</span>
+                  <span class="slider-row__out">−1.0 dB</span>
+                </div>
+                <input class="xr-range" type="range" min="-12" max="0" value="-1" style="--slider-progress: 92%" aria-valuetext="−1.0 dB" />
+              </div>
+              <div class="slider-row">
+                <div class="slider-row__top">
+                  <span class="slider-row__label">Release</span>
+                  <span class="slider-row__out">100 ms</span>
+                </div>
+                <input class="xr-range" type="range" min="10" max="1000" value="100" style="--slider-progress: 9%" aria-valuetext="100 ms" />
+              </div>
+            </article>
+            <article class="module module--off xr-off">
+              <div class="module__head">
+                <h3 class="module__title">Stereo Width</h3>
+                <button class="toggle" aria-pressed="false">Off</button>
+              </div>
+              <div class="slider-row">
+                <div class="slider-row__top">
+                  <span class="slider-row__label">Side gain (1 = unchanged)</span>
+                  <span class="slider-row__out">1.00</span>
+                </div>
+                <input class="xr-range" type="range" min="0" max="2" value="1" step="0.01" style="--slider-progress: 50%" aria-valuetext="1.00" />
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. Readouts, warnings, waveform ---------------------------------- -->
+      <section class="spec xr-panel">
+        <div class="spec__head"><h2>04 · Data</h2><span>Readouts · warnings · dual trace</span></div>
+        <div class="grid-2">
+          <div>
+            <div class="readout__label">Result</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--xr-space-3) var(--xr-space-4); margin-top: var(--xr-space-2)">
+              <div>
+                <div class="readout__label">Integrated</div>
+                <div class="readout__value lg">−14.2<span class="readout__unit">LUFS</span></div>
+              </div>
+              <div>
+                <div class="readout__label">True peak</div>
+                <div class="readout__value lg">−1.0<span class="readout__unit">dBTP</span></div>
+              </div>
+              <div>
+                <div class="readout__label">Range</div>
+                <div class="readout__value">6.4<span class="readout__unit">LU</span></div>
+              </div>
+              <div>
+                <div class="readout__label">Output gain</div>
+                <div class="readout__value">1.5<span class="readout__unit">dB</span></div>
+              </div>
+            </div>
+            <ul class="warn" style="margin-top: var(--xr-space-4); padding-top: var(--xr-space-3); border-top: 1px solid var(--xr-line)">
+              <li><span aria-hidden="true">▸</span><span>Limiter working past 4 dB. Back off input or target.</span></li>
+              <li><span aria-hidden="true">▸</span><span>Channels partly out of phase. Check mono. (in source)</span></li>
+              <li><span aria-hidden="true">▸</span><span>Looks already mastered. Go light.</span></li>
+            </ul>
+            <ul class="notes" style="margin-top: var(--xr-space-4); padding-top: var(--xr-space-3); border-top: 1px solid var(--xr-line)">
+              <li><b></b><span>Broad tonal move, bounded by analysis confidence.</span></li>
+              <li><b></b><span>Measured high-frequency energy scaled the brightness boost down.</span></li>
+              <li><b></b><span>Limiter budget held to 3 dB at this target.</span></li>
+            </ul>
+          </div>
+          <div>
+            <div class="xr-label" style="margin-bottom: var(--xr-space-2)">Monitor · source in ash, master in gold</div>
+            <div class="wave" role="img" aria-label="Waveform: source envelope in grey, master envelope in gold, playhead">
+              <div id="wave-source" style="position: absolute; inset: 0; display: flex; align-items: center; gap: 1px"></div>
+              <div id="wave-master" style="position: absolute; inset: 0; display: flex; align-items: center; gap: 1px; opacity: 0.85"></div>
+              <div class="wave__playhead"></div>
+            </div>
+            <div class="row" style="margin-top: var(--xr-space-3)">
+              <span class="mono" style="font-size: var(--xr-size-label); color: var(--xr-ash)">1:42.3 / 3:18.0</span>
+              <button class="toggle" aria-pressed="false">Master</button>
+              <button class="toggle" aria-pressed="true">Match LUFS</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. Space and elevation ------------------------------------------- -->
+      <section class="spec xr-panel">
+        <div class="spec__head"><h2>05 · Space &amp; depth</h2><span>4px base · bevel on every raised surface</span></div>
+        <div class="grid-2">
+          <div class="spacing">
+            <div><i style="width: 4px"></i><code>space-1 · 4px</code></div>
+            <div><i style="width: 8px"></i><code>space-2 · 8px</code></div>
+            <div><i style="width: 12px"></i><code>space-3 · 12px</code></div>
+            <div><i style="width: 16px"></i><code>space-4 · 16px — the rhythm unit</code></div>
+            <div><i style="width: 20px"></i><code>space-5 · 20px</code></div>
+            <div><i style="width: 24px"></i><code>space-6 · 24px</code></div>
+            <div><i style="width: 32px"></i><code>space-8 · 32px</code></div>
+            <div><i style="width: 40px"></i><code>space-10 · 40px</code></div>
+          </div>
+          <div style="display: grid; gap: var(--xr-space-3)">
+            <div class="elev elev--panel"><span class="elev__tag" style="color: var(--xr-ash)">1 · panel · glass + 18px blur</span></div>
+            <div class="elev elev--module"><span class="elev__tag" style="color: var(--xr-cloud)">2 · raised · module, button</span></div>
+            <div class="elev elev--gold"><span class="elev__tag">3 · accent · primary action</span></div>
+            <div class="elev elev--media"><span class="elev__tag" style="color: var(--xr-gold)">4 · media frame</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. Do / don't ---------------------------------------------------- -->
+      <section class="spec xr-panel">
+        <div class="spec__head"><h2>06 · Rules</h2><span>The eight that get broken first</span></div>
+        <div class="grid-2">
+          <div class="do">
+            <h3>Do</h3>
+            <ul>
+              <li>Keep gold to the mark, the active/primary state, and a confirmed measurement.</li>
+              <li>Set every label, button and chrome string in mono, uppercase, 0.12em.</li>
+              <li>Separate with a 1px hairline before adding a container.</li>
+              <li>Keep the inset white bevel on every raised surface.</li>
+              <li>Say what the machine did, and let the user overrule it.</li>
+            </ul>
+          </div>
+          <div class="dont">
+            <h3>Don't</h3>
+            <ul>
+              <li>Introduce a second hue, an amber, or a red error state.</li>
+              <li>Round a corner. The 6px status dot is the only curve.</li>
+              <li>Lighten <span class="mono">muted</span>, or use it for required text.</li>
+              <li>Animate width, height, or layout position.</li>
+              <li>Use <span class="mono">#FFFFFF</span> for body copy; it is emphasis-only.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <footer class="spec-foot">XYP3RN Tech · Local processing · No audio leaves the machine</footer>
+    </div>
+
+    <script>
+      // Dual-trace envelope, deterministic so the reference render is stable.
+      // Source in #444444, master in gold at 0.85 — mirrors Waveform.tsx.
+      (function drawWave() {
+        const source = document.getElementById('wave-source');
+        const master = document.getElementById('wave-master');
+        if (!source || !master) return;
+
+        const width = source.clientWidth || 640;
+        const count = Math.max(64, Math.floor(width / 3));
+        const envAt = (t) =>
+          0.28 +
+          0.52 * Math.abs(Math.sin(t * 9.1 + 0.4)) * (0.6 + 0.4 * Math.abs(Math.sin(t * 41))) +
+          0.14 * Math.abs(Math.sin(t * 173));
+
+        const build = (target, colour, scale) => {
+          const frag = document.createDocumentFragment();
+          for (let i = 0; i < count; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'wave__bar';
+            bar.style.height = Math.min(100, envAt(i / count) * 100 * scale).toFixed(1) + '%';
+            bar.style.background = colour;
+            frag.appendChild(bar);
+          }
+          target.appendChild(frag);
+        };
+
+        build(source, '#444444', 0.92);
+        build(master, '#FACD68', 1.12);
+      })();
+    </script>
+  </body>
+</html>

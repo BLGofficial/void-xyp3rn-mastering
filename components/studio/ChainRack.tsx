@@ -20,7 +20,7 @@ function ModuleCard({ proc, onChange, onRemove }: { proc: ProcessorState; onChan
   const def = DEFINITIONS[proc.id];
   const set = (key: string, value: number) => onChange({ ...proc, parameters: { ...proc.parameters, [key]: value } });
   return (
-    <article className={`border bg-surface p-4 transition-colors ${proc.bypassed ? 'xr-off border-line' : 'border-gold-dim'}`} aria-label={def.name}>
+    <article className={`xr-module border p-4 ${proc.bypassed ? 'xr-off border-line' : 'border-gold-dim'}`} aria-label={def.name}>
       <header className="mb-3 flex items-center justify-between gap-2">
         <h3 className={`font-heading text-sm font-bold ${proc.bypassed ? 'text-ash' : 'text-cloud'}`}>{def.name}</h3>
         <div className="flex gap-1.5">

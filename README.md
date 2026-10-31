@@ -42,5 +42,12 @@ npm run typecheck
 ## Design
 
 Tokens, components and copy rules live in [`docs/design-system.md`](docs/design-system.md);
-framework-free values in [`docs/design-tokens.css`](docs/design-tokens.css). Both are extracted
-from `tailwind.config.ts` and `app/globals.css` and cite the file each value comes from.
+framework-free values in [`docs/design-tokens.css`](docs/design-tokens.css); a rendered
+reference in [`docs/styleguide.html`](docs/styleguide.html). All three are extracted from
+`tailwind.config.ts` and `app/globals.css` and cite the file each value comes from.
+
+The reference is a static file with no build step — open it directly, or serve the folder:
+
+```sh
+python3 -m http.server 8080 --directory docs
+```

@@ -1,0 +1,442 @@
+/* ==========================================================================
+   XYP3RN MASTERING — design tokens
+   Companion to docs/design-system.md. Values are copied verbatim from
+   tailwind.config.ts and app/globals.css at commit 4408fa7.
+
+   Purpose: the same palette and motion vocabulary in a framework-free form,
+   for surfaces built outside the Next/Tailwind app (docs sites, embeds,
+   design tools, prototypes).
+   The app itself does NOT import this file — Tailwind is its native source.
+
+   Colour, glass, type, motion and radius values are verbatim from the source.
+   Composite conveniences (--xr-shadow-*, --xr-space-*, layout, focus) are
+   assembled from those values for reuse; they are not declarations the app
+   makes. Every literal is traceable in docs/design-system.md.
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+  accent-color: var(--xr-gold);
+
+  /* ---- Surfaces -------------------------------------------------------- */
+  --xr-studio: #080808;          /* primary canvas */
+  --xr-panel: #0d0d0d;           /* cards, sections */
+  --xr-surface: #111111;         /* raised UI, hover */
+  --xr-chrome: #000000;          /* bars, nav, media frame */
+
+  /* ---- Accent ---------------------------------------------------------- */
+  /* One hue only. Amber is XYP3RN Records-only and deliberately absent. */
+  --xr-gold: #facd68;
+  --xr-gold-dim: #c9a03e;        /* press / hover fill, active border */
+  --xr-gold-glow: #2a1e00;       /* alert + drag-over tint */
+
+  /* ---- Text ------------------------------------------------------------ */
+  --xr-cloud: #e8e8e8;           /* headings, key content */
+  --xr-ash: #a6a6a6;             /* body copy, labels */
+  --xr-muted: #686868;           /* metadata only — never required text */
+  --xr-white: #ffffff;           /* high-contrast emphasis only (unused today) */
+
+  /* ---- Lines ----------------------------------------------------------- */
+  --xr-line: #282828;            /* dividers */
+  --xr-line-card: #343434;       /* default border */
+  --xr-slider-track: #222222;    /* 4px range track */
+  --xr-off-fill: #444444;        /* bypassed / disabled slider fill */
+
+  /* ---- Code / data wells ---------------------------------------------- */
+  --xr-code-bg: #0a0a0a;
+  --xr-code-fg: #d4d4d4;
+
+  /* ---- Glass ----------------------------------------------------------- */
+  --xr-glass: rgb(13 13 13 / 78%);
+  --xr-glass-raised: rgb(20 20 20 / 72%);
+  --xr-glass-line: rgb(255 255 255 / 11%);
+  --xr-gold-line: rgb(250 205 104 / 32%);
+  --xr-glass-blur: 18px;
+  --xr-glass-saturate: 115%;
+
+  /* ---- Type ------------------------------------------------------------ */
+  --xr-font-display: 'Bebas Neue', Impact, sans-serif;   /* wordmark only */
+  --xr-font-heading: 'Syne', system-ui, sans-serif;      /* component titles */
+  --xr-font-body: 'DM Sans', system-ui, sans-serif;      /* prose */
+  --xr-font-mono: 'JetBrains Mono', ui-monospace, monospace; /* labels, numbers */
+
+  --xr-size-display-lg: 44px;    /* XYP3RN */
+  --xr-size-display-sm: 28px;    /* MASTERING */
+  --xr-size-value-lg: 24px;      /* emphasised readout */
+  --xr-size-value: 16px;         /* standard readout */
+  --xr-size-title: 14px;         /* module title (Syne 700) */
+  --xr-size-body: 14px;
+  --xr-size-label: 12px;         /* mono microlabel / unit / helper */
+  --xr-tracking-label: 0.12em;   /* every uppercase mono element */
+  --xr-tracking-display: 0.025em;
+
+  /* ---- Space (4px base) ------------------------------------------------ */
+  --xr-space-1: 4px;
+  --xr-space-2: 8px;
+  --xr-space-3: 12px;
+  --xr-space-4: 16px;            /* the rhythm unit: between and inside panels */
+  --xr-space-5: 20px;
+  --xr-space-6: 24px;
+  --xr-space-8: 32px;
+  --xr-space-10: 40px;
+  --xr-hit-target: 44px;         /* 2.75rem, below 640px only */
+
+  /* ---- Layout ---------------------------------------------------------- */
+  --xr-max-width: 1440px;
+  --xr-rail-width: 360px;
+  --xr-waveform-height: 112px;
+
+  /* ---- Radius ---------------------------------------------------------- */
+  /* Square by rule. The 6px status dot is the only curve in the product. */
+  --xr-radius: 0;
+  --xr-radius-dot: 9999px;
+
+  /* ---- Elevation ------------------------------------------------------- */
+  /* Every raised surface carries a 1px white inset top highlight (the bevel). */
+  --xr-bevel: inset 0 1px 0 rgb(255 255 255 / 4%);
+  --xr-bevel-strong: inset 0 1px 0 rgb(255 255 255 / 35%);
+  --xr-shadow-panel: 0 18px 48px rgb(0 0 0 / 28%), var(--xr-bevel);
+  --xr-shadow-panel-hover: 0 22px 58px rgb(0 0 0 / 34%), inset 0 1px 0 rgb(255 255 255 / 6%);
+  --xr-shadow-module-hover: 0 12px 28px rgb(0 0 0 / 22%), inset 0 1px 0 rgb(255 255 255 / 5%);
+  --xr-shadow-gold: 0 8px 24px rgb(250 205 104 / 14%), var(--xr-bevel-strong);
+  --xr-shadow-gold-hover: 0 12px 30px rgb(250 205 104 / 22%), inset 0 1px 0 rgb(255 255 255 / 28%);
+  --xr-shadow-media: 0 18px 48px rgb(0 0 0 / 45%);
+
+  /* ---- Focus ----------------------------------------------------------- */
+  --xr-focus-ring: 2px solid var(--xr-gold);
+  --xr-focus-offset: 2px;
+  --xr-focus-halo: 0 0 0 4px rgb(250 205 104 / 9%);
+
+  /* ---- Motion ---------------------------------------------------------- */
+  --xr-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --xr-ease-soft: cubic-bezier(0.33, 1, 0.68, 1);
+  --xr-fast: 180ms;              /* anything the pointer is touching */
+  --xr-smooth: 420ms;            /* surfaces, reveals */
+  --xr-intro: 620ms;             /* workspace entrance */
+
+  /* ---- Atmosphere ------------------------------------------------------ */
+  --xr-grid-size: 36px;
+  --xr-grid-line: rgb(255 255 255 / 2%);
+  --xr-glow-1: rgb(250 205 104 / 7%);
+  --xr-glow-2: rgb(250 205 104 / 4%);
+}
+
+/* ==========================================================================
+   Reference implementations — minimal, framework-free mirrors of the app's
+   .xr-* classes. Opt in by adding the class; nothing below is a reset.
+   ========================================================================== */
+
+.xr-surface-page {
+  background-color: var(--xr-studio);
+  background-image:
+    radial-gradient(circle at 12% 8%, var(--xr-glow-1), transparent 28rem),
+    radial-gradient(circle at 88% 32%, var(--xr-glow-2), transparent 24rem),
+    linear-gradient(145deg, #080808 0%, #0b0b0b 48%, #070707 100%);
+  background-attachment: fixed;
+  color: var(--xr-ash);
+  font-family: var(--xr-font-body);
+}
+
+.xr-surface-page::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  content: '';
+  opacity: 0.32;
+  background-image:
+    linear-gradient(var(--xr-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--xr-grid-line) 1px, transparent 1px);
+  background-size: var(--xr-grid-size) var(--xr-grid-size);
+  mask-image: linear-gradient(to bottom, black, transparent 70%);
+}
+
+.xr-panel,
+.xr-glass {
+  border: 1px solid var(--xr-line-card);
+  border-radius: var(--xr-radius);
+}
+
+.xr-panel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: var(--xr-glass);
+  box-shadow: var(--xr-shadow-panel);
+  transition:
+    transform var(--xr-smooth) var(--xr-ease),
+    border-color var(--xr-fast) ease,
+    box-shadow var(--xr-smooth) ease;
+}
+
+.xr-panel::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(135deg, rgb(255 255 255 / 4%), transparent 32%, rgb(250 205 104 / 2%));
+}
+
+.xr-glass {
+  background: rgb(0 0 0 / 68%);
+  border-color: var(--xr-glass-line);
+  box-shadow: var(--xr-bevel);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .xr-panel,
+  .xr-glass {
+    backdrop-filter: blur(var(--xr-glass-blur)) saturate(var(--xr-glass-saturate));
+  }
+}
+
+.xr-label {
+  font-family: var(--xr-font-mono);
+  font-size: var(--xr-size-label);
+  line-height: 1rem;
+  text-transform: uppercase;
+  letter-spacing: var(--xr-tracking-label);
+  color: var(--xr-ash);
+}
+
+.xr-button,
+.xr-button-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--xr-space-2);
+  min-height: var(--xr-hit-target);
+  border-radius: var(--xr-radius);
+  font-family: var(--xr-font-mono);
+  font-size: var(--xr-size-label);
+  line-height: 1rem;
+  text-transform: uppercase;
+  letter-spacing: var(--xr-tracking-label);
+  cursor: pointer;
+  transition:
+    transform var(--xr-fast) var(--xr-ease),
+    color var(--xr-fast) ease,
+    border-color var(--xr-fast) ease,
+    background-color var(--xr-fast) ease,
+    box-shadow var(--xr-fast) ease;
+}
+
+.xr-button {
+  padding: var(--xr-space-2) var(--xr-space-4);
+  border: 1px solid var(--xr-line-card);
+  background: var(--xr-glass-raised);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+  color: var(--xr-cloud);
+}
+
+.xr-button-primary {
+  padding: 0.625rem var(--xr-space-5);
+  border: 0;
+  background: var(--xr-gold);
+  box-shadow: var(--xr-shadow-gold);
+  color: var(--xr-studio);
+  font-weight: 700;
+}
+
+.xr-button:focus-visible,
+.xr-button-primary:focus-visible {
+  outline: var(--xr-focus-ring);
+  outline-offset: var(--xr-focus-offset);
+}
+
+.xr-button:disabled,
+.xr-button-primary:disabled {
+  cursor: not-allowed;
+}
+
+.xr-button:disabled {
+  color: var(--xr-muted);
+}
+
+.xr-button-primary:disabled {
+  background: var(--xr-surface);
+  color: var(--xr-muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .xr-panel:hover {
+    transform: translateY(-1px);
+    border-color: var(--xr-glass-line);
+    box-shadow: var(--xr-shadow-panel-hover);
+  }
+
+  .xr-button:not(:disabled):hover,
+  .xr-button-primary:not(:disabled):hover {
+    transform: translateY(-2px);
+  }
+
+  .xr-button:not(:disabled):hover {
+    border-color: var(--xr-gold-line);
+    background: rgb(28 25 19 / 78%);
+    color: var(--xr-gold);
+    box-shadow: 0 8px 22px rgb(0 0 0 / 24%), inset 0 1px 0 rgb(255 255 255 / 7%);
+  }
+
+  .xr-button-primary:not(:disabled):hover {
+    background: var(--xr-gold-dim);
+    box-shadow: var(--xr-shadow-gold-hover);
+  }
+}
+
+.xr-button:active:not(:disabled),
+.xr-button-primary:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+}
+
+.xr-select {
+  min-height: var(--xr-hit-target);
+  width: 100%;
+  padding: var(--xr-space-2) var(--xr-space-3);
+  border: 1px solid var(--xr-line-card);
+  border-radius: var(--xr-radius);
+  background-color: rgb(17 17 17 / 82%);
+  color: var(--xr-cloud);
+  font-family: var(--xr-font-mono);
+  font-size: var(--xr-size-label);
+  transition: border-color var(--xr-fast) ease, background-color var(--xr-fast) ease, box-shadow var(--xr-fast) ease;
+}
+
+.xr-select:hover {
+  border-color: var(--xr-glass-line);
+  background-color: rgb(24 24 24 / 90%);
+}
+
+.xr-select:focus-visible {
+  outline: var(--xr-focus-ring);
+  outline-offset: 1px;
+  box-shadow: var(--xr-focus-halo);
+}
+
+.xr-range {
+  --slider-track-size: 4px;
+  --slider-thumb-size: 14px;
+  --slider-track-color: var(--xr-slider-track);
+  --slider-fill-color: var(--xr-gold);
+  --slider-progress: 50%;
+  appearance: none;
+  inline-size: 100%;
+  block-size: 1.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.xr-range::-webkit-slider-runnable-track {
+  block-size: var(--slider-track-size);
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(
+    to right,
+    var(--slider-fill-color) var(--slider-progress),
+    var(--slider-track-color) var(--slider-progress)
+  );
+}
+
+.xr-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  inline-size: var(--slider-thumb-size);
+  block-size: var(--slider-thumb-size);
+  margin-block-start: calc((var(--slider-track-size) - var(--slider-thumb-size)) / 2);
+  border: 2px solid var(--xr-studio);
+  border-radius: 0;
+  background: var(--slider-fill-color);
+  transition: transform var(--xr-fast) var(--xr-ease), box-shadow var(--xr-fast) ease;
+}
+
+.xr-range::-moz-range-track {
+  block-size: var(--slider-track-size);
+  border: 0;
+  background: var(--slider-track-color);
+}
+
+.xr-range::-moz-range-progress {
+  block-size: var(--slider-track-size);
+  background: var(--slider-fill-color);
+}
+
+.xr-range::-moz-range-thumb {
+  inline-size: var(--slider-thumb-size);
+  block-size: var(--slider-thumb-size);
+  border: 2px solid var(--xr-studio);
+  border-radius: 0;
+  background: var(--slider-fill-color);
+  transition: transform var(--xr-fast) var(--xr-ease), box-shadow var(--xr-fast) ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .xr-range:hover::-webkit-slider-thumb,
+  .xr-range:hover::-moz-range-thumb {
+    transform: scale(1.12);
+    box-shadow: 0 0 0 4px rgb(250 205 104 / 12%);
+  }
+}
+
+.xr-range:focus-visible {
+  outline: var(--xr-focus-ring);
+  outline-offset: var(--xr-focus-offset);
+}
+
+.xr-range:disabled {
+  --slider-fill-color: var(--xr-off-fill);
+  cursor: not-allowed;
+}
+
+/* Bypassed module: controls stay live, read as inactive. */
+.xr-off .xr-range {
+  --slider-fill-color: var(--xr-off-fill);
+}
+
+::selection {
+  background: var(--xr-gold);
+  color: var(--xr-studio);
+}
+
+@keyframes xr-reveal {
+  from { opacity: 0.76; transform: translateY(10px); filter: blur(4px); }
+  to   { opacity: 1;    transform: translateY(0);    filter: blur(0); }
+}
+
+.xr-reveal {
+  animation: xr-reveal var(--xr-smooth) var(--xr-ease) both;
+}
+
+@media (max-width: 639px) {
+  /* Density inversion: touch band below sm, compact above. */
+  .xr-range { block-size: var(--xr-hit-target); }
+}
+
+@media (max-width: 639px) {
+  .xr-button,
+  .xr-button-primary,
+  .xr-select {
+    min-height: var(--xr-hit-target);
+  }
+}
+
+@media (min-width: 640px) {
+  .xr-button,
+  .xr-button-primary,
+  .xr-select {
+    min-height: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

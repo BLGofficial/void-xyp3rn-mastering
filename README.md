@@ -38,3 +38,9 @@ npm run typecheck
 
 - Static export (`output: 'export'`): Next 14 is end-of-life and has unpatched server-side advisories; with no Next server at runtime those paths don't exist in production.
 - Brand: mark is gold `#FACD68` on Studio Black `#080808` only, never below 24 px.
+
+## Design
+
+Tokens, components and copy rules live in [`docs/design-system.md`](docs/design-system.md);
+framework-free values in [`docs/design-tokens.css`](docs/design-tokens.css). Both are extracted
+from `tailwind.config.ts` and `app/globals.css` and cite the file each value comes from.

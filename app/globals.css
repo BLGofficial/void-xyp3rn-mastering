@@ -35,6 +35,11 @@ body {
     background: transparent;
     cursor: pointer;
   }
+  @media (max-width: 639px) {
+    .xr-range {
+      block-size: 2.75rem;
+    }
+  }
   /* Bypassed module: controls stay live but read as inactive. */
   .xr-off .xr-range {
     --slider-fill-color: #444444;
@@ -88,12 +93,12 @@ body {
     @apply border border-line-card bg-panel;
   }
   .xr-button {
-    @apply inline-flex items-center justify-center gap-2 border border-line-card bg-surface px-4 py-2 font-mono text-xs uppercase tracking-label text-cloud transition-colors hover:border-gold-dim hover:text-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:text-muted disabled:hover:border-line-card;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 border border-line-card bg-surface px-4 py-2 font-mono text-xs uppercase tracking-label text-cloud transition-colors hover:border-gold-dim hover:text-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:text-muted disabled:hover:border-line-card sm:min-h-0;
   }
   .xr-button-primary {
-    @apply inline-flex items-center justify-center gap-2 bg-gold px-5 py-2.5 font-mono text-xs font-bold uppercase tracking-label text-studio transition-colors hover:bg-gold-dim focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:bg-surface disabled:text-muted;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 bg-gold px-5 py-2.5 font-mono text-xs font-bold uppercase tracking-label text-studio transition-colors hover:bg-gold-dim focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:bg-surface disabled:text-muted sm:min-h-0;
   }
   .xr-select {
-    @apply w-full border border-line-card bg-surface px-3 py-2 font-mono text-xs text-cloud focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-gold;
+    @apply min-h-11 w-full border border-line-card bg-surface px-3 py-2 font-mono text-xs text-cloud focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-gold sm:min-h-0;
   }
 }

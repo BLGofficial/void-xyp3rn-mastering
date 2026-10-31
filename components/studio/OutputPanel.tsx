@@ -73,7 +73,7 @@ export function OutputPanel(props: {
             </select>
           </label>
         </div>
-        <label className="flex items-center gap-2 text-xs text-ash">
+        <label className="flex min-h-11 items-center gap-2 text-xs text-ash sm:min-h-0">
           <input data-testid="dither" type="checkbox" className="h-4 w-4" checked={props.dither && props.format !== 'float32'} disabled={props.format === 'float32'} onChange={e => props.onDither(e.currentTarget.checked)} />
           TPDF dither on PCM export
         </label>

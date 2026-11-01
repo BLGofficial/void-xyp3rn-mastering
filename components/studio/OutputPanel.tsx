@@ -1,7 +1,7 @@
 'use client';
 
+import { isMp3, type ExportFormat } from '@/audio/export-flow';
 import type { RenderResult } from '@/audio/protocol';
-import type { WavFormat } from '@/lib/engine';
 import { num } from './format';
 import { Panel, Readout } from './ui';
 
@@ -20,10 +20,12 @@ export const TARGETS = [
   { value: '-23', label: '−23 LUFS · broadcast (R128)' },
 ] as const;
 export const CEILINGS = [-0.5, -1, -2] as const;
-const FORMATS: { value: WavFormat; label: string }[] = [
-  { value: 'pcm24', label: '24-bit PCM' },
-  { value: 'pcm16', label: '16-bit PCM' },
-  { value: 'float32', label: '32-bit float' },
+const FORMATS: { value: ExportFormat; label: string }[] = [
+  { value: 'pcm24', label: 'WAV 24-bit' },
+  { value: 'pcm16', label: 'WAV 16-bit' },
+  { value: 'float32', label: 'WAV 32-bit float' },
+  { value: 'mp3', label: 'MP3 320 kbps' },
+  { value: 'mp3-192', label: 'MP3 192 kbps' },
 ];
 
 const WARNING_TEXT: Record<string, string> = {
@@ -50,13 +52,20 @@ const WARNING_TEXT: Record<string, string> = {
 /** Loudness target, ceiling, render report and export. Suggests — never decides. */
 export function OutputPanel(props: {
   target: string; onTarget: (v: string) => void; ceiling: number; onCeiling: (v: number) => void;
-  format: WavFormat; onFormat: (v: WavFormat) => void; dither: boolean; onDither: (v: boolean) => void;
+  format: ExportFormat; onFormat: (v: ExportFormat) => void; dither: boolean; onDither: (v: boolean) => void;
   canRender: boolean; busy: boolean; rendering: boolean; progress: number | null; onRender: () => void;
   result: RenderResult | null; renderedFile: RenderedFile | null;
+  /** Encode the current render in the selected format (format/dither changed since). */
+  onPrepare: () => void;
+  /** Download the rendered file with a PDF mastering report, as a ZIP. */
+  onReport: () => void;
 }) {
   const { result } = props;
   const status = result?.targetResult?.status ?? (result ? 'rendered' : null);
   const lufs = result?.metrics.loudness.integratedLufs;
+  // Dither applies at PCM quantisation only; MP3 and float have none.
+  const ditherable = props.format === 'pcm16' || props.format === 'pcm24';
+  const kind = isMp3(props.format) ? 'MP3' : 'WAV';
   return (
     <Panel title="Output">
       <div className="space-y-3">
@@ -75,15 +84,18 @@ export function OutputPanel(props: {
           </label>
           <label className="block">
             <span className="xr-label">Format</span>
-            <select data-testid="format-select" className="xr-select mt-1" value={props.format} onChange={e => props.onFormat(e.currentTarget.value as WavFormat)}>
+            <select data-testid="format-select" className="xr-select mt-1" value={props.format} onChange={e => props.onFormat(e.currentTarget.value as ExportFormat)}>
               {FORMATS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
             </select>
           </label>
         </div>
         <label className="flex min-h-11 items-center gap-2 text-xs text-ash sm:min-h-0">
-          <input data-testid="dither" type="checkbox" className="h-4 w-4" checked={props.dither && props.format !== 'float32'} disabled={props.format === 'float32'} onChange={e => props.onDither(e.currentTarget.checked)} />
+          <input data-testid="dither" type="checkbox" className="h-4 w-4" checked={props.dither && ditherable} disabled={!ditherable} onChange={e => props.onDither(e.currentTarget.checked)} />
           TPDF dither on PCM export
         </label>
+        {isMp3(props.format) && (
+          <p className="text-xs text-muted">MP3 is decoded and re-measured after encoding; codec gain is trimmed until the decoded file holds the ceiling.</p>
+        )}
         <button type="button" data-testid="render" className="xr-button-primary w-full" disabled={!props.canRender || props.busy} onClick={props.onRender}>
           {props.busy ? 'Rendering…' : 'Render master'}
         </button>
@@ -126,6 +138,11 @@ export function OutputPanel(props: {
               ))}
             </ul>
           )}
+          {!props.renderedFile && !props.rendering && (
+            <button type="button" data-testid="prepare-file" className="xr-button w-full" disabled={props.busy} onClick={props.onPrepare}>
+              {props.busy ? 'Preparing…' : `Prepare ${kind} from this render`}
+            </button>
+          )}
           {props.renderedFile && (
             <div className="space-y-3 border-t border-line pt-4">
               <div>
@@ -135,8 +152,11 @@ export function OutputPanel(props: {
               </div>
               <audio data-testid="rendered-audio" className="w-full" controls preload="metadata" src={props.renderedFile.url} />
               <a data-testid="export" className="xr-button block w-full text-center" href={props.renderedFile.url} download={props.renderedFile.name}>
-                Download WAV
+                Download {props.renderedFile.name.endsWith('.mp3') ? 'MP3' : 'WAV'}
               </a>
+              <button type="button" data-testid="report-bundle" className="xr-button w-full" disabled={props.busy} onClick={props.onReport}>
+                Download with PDF report (ZIP)
+              </button>
             </div>
           )}
         </div>

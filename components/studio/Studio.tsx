@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createEngineClient, type EngineClient } from '@/audio/engine-client';
+import { bundleReport, prepareAudio, type ExportFormat, type PreparedAudio } from '@/audio/export-flow';
 import { createPlayer, type Player } from '@/audio/player';
 import type { AutoResult, LiveMeters, LoadResult, RenderResult } from '@/audio/protocol';
 import type { Intention, Style } from '@/lib/auto';
 import { defaultState, type ChainState } from '@/lib/dsp';
-import type { WavFormat } from '@/lib/engine';
 import { AutoPanel } from './AutoPanel';
 import { ChainRack } from './ChainRack';
 import { Header } from './Header';
@@ -19,7 +19,7 @@ import { Waveform } from './Waveform';
 type Loaded = LoadResult & { fileName: string; fileSize: number };
 /** A render is only current while the settings it was made from are unchanged. */
 type Stored = RenderResult & { key: string; notes?: string[] };
-type StoredFile = RenderedFile & { key: string };
+type StoredFile = RenderedFile & { key: string; prepared: PreparedAudio };
 
 /** State actually rendered: musical chain + output ceiling + optional loudness target. */
 function renderState(chain: ChainState, target: string, ceiling: number): ChainState {
@@ -30,8 +30,18 @@ function renderState(chain: ChainState, target: string, ceiling: number): ChainS
 }
 
 const settingsKey = (chain: ChainState, target: string, ceiling: number) => JSON.stringify(renderState(chain, target, ceiling));
-const artifactKey = (chain: ChainState, target: string, ceiling: number, format: WavFormat, dither: boolean) =>
+const artifactKey = (chain: ChainState, target: string, ceiling: number, format: ExportFormat, dither: boolean) =>
   `${settingsKey(chain, target, ceiling)}|${format}|${dither}`;
+
+function download(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  // Give the browser a tick to start the download before revoking.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 export function Studio() {
   const engine = useRef<EngineClient | null>(null);
@@ -46,7 +56,7 @@ export function Studio() {
   const [chain, setChain] = useState<ChainState>(() => defaultState());
   const [target, setTarget] = useState('off');
   const [ceiling, setCeiling] = useState(-1);
-  const [format, setFormat] = useState<WavFormat>('pcm24');
+  const [format, setFormat] = useState<ExportFormat>('pcm24');
   const [dither, setDither] = useState(true);
   const [stored, setStored] = useState<Stored | null>(null);
   const [renderedFile, setRenderedFile] = useState<StoredFile | null>(null);
@@ -152,16 +162,48 @@ export function Studio() {
 
   const prepareRenderedFile = async (nextChain: ChainState, nextCeiling: number) => {
     if (!engine.current || !source) return;
-    const { bytes } = await engine.current.exportWav(format, dither, { onStatus: setStatus });
-    const base = source.fileName.replace(/\.[^.]+$/, '');
-    const tag = target === 'off' ? 'master' : `${target}LUFS`;
-    const name = `${base}_XYP3RN_${tag}_${format}.wav`;
+    const prepared = await prepareAudio(engine.current, {
+      format, dither, sourceFileName: source.fileName, ceilingDbtp: nextCeiling, targetLufs: target === 'off' ? null : Number(target),
+    }, { onStatus: setStatus, onProgress: setProgress });
     setRenderedFile({
       key: artifactKey(nextChain, target, nextCeiling, format, dither),
-      name,
-      url: URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' })),
-      size: bytes.byteLength,
+      name: prepared.filename,
+      url: URL.createObjectURL(prepared.blob),
+      size: prepared.blob.size,
+      prepared,
     });
+  };
+
+  /** Re-encode the current render for a changed format/dither, without re-rendering. */
+  const prepareCurrent = async () => {
+    if (!result) return;
+    setBusy(true); setError(null);
+    try {
+      await prepareRenderedFile(chain, ceiling);
+      setStatus('Engine: rendered file ready');
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false); setProgress(null);
+    }
+  };
+
+  const downloadReport = async () => {
+    if (!engine.current || !source || !result || !currentRenderedFile) return;
+    setBusy(true); setError(null);
+    try {
+      const file = await bundleReport(engine.current, currentRenderedFile.prepared, {
+        dither, targetLufs: target === 'off' ? null : Number(target),
+        source: { fileName: source.fileName, metrics: source.metrics, sampleRate: source.sampleRate, channels: source.metadata.channels, duration: source.metadata.length / source.sampleRate },
+        render: { state: result.state, safety: result.safety, targetResult: result.targetResult },
+      }, { onStatus: setStatus });
+      download(file.blob, file.filename);
+      setStatus('Engine: report bundled');
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const acceptAutomaticResult = async (r: AutoResult, readyStatus: string) => {
@@ -245,12 +287,14 @@ export function Studio() {
             target={target} onTarget={setTarget} ceiling={ceiling} onCeiling={setCeiling} format={format} onFormat={setFormat}
             dither={dither} onDither={setDither} canRender={!!source} busy={busy} rendering={rendering} progress={progress}
             onRender={render} result={result} renderedFile={currentRenderedFile}
+            onPrepare={prepareCurrent} onReport={downloadReport}
           />
           <p className="mt-3 font-mono text-xs uppercase tracking-label text-muted">Suggests — never decides. You keep the final call.</p>
         </aside>
       </main>
       <footer className="xr-glass border-t border-line px-4 py-2 font-mono text-xs uppercase tracking-label text-muted md:px-8">
-        XYP3RN Tech · Local processing · No audio leaves the machine
+        XYP3RN Tech · Local processing · No audio leaves the machine · MP3 encoding by{' '}
+        <a className="text-ash underline-offset-2 hover:underline" href="https://lame.sourceforge.io" target="_blank" rel="noreferrer">LAME</a> (LGPL)
       </footer>
     </div>
   );

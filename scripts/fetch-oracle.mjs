@@ -20,6 +20,9 @@ const FILES = {
   'void-auto.js': 'df5dcdb2a466717c22680093b19aa8a9d7644a033451bfa62c1b4898c609034e',
   // Only its local tonal profile() is used; its network request path is never called.
   'void-ai.js': '2625ae5ce387cc93cbf9cde839190b7e1f3bc4624db68f2e8908a6bad34485ce',
+  // MP3 re-encode policy (its LAME worker is not fetched) and the local PDF/ZIP report.
+  'void-export.js': '0aef2d8d5ceed1cf4018836df6e2b0ab1b28aa467fc381d0d80c4693d3d286af',
+  'void-report.js': '175f459447b4f843451a31a82c9329eb351d880d17bd2a152de16f6134097ff3',
 };
 
 const out = join(dirname(fileURLToPath(import.meta.url)), '..', 'vendor', 'void-oracle');

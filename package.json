@@ -7,9 +7,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "worklet": "node scripts/build-worklet.mjs",
-    "dev": "npm run worklet && next dev",
-    "build": "npm run worklet && next build",
+    "assets": "node scripts/build-assets.mjs",
+    "dev": "npm run assets && next dev",
+    "build": "npm run assets && next build",
     "serve": "node scripts/serve-static.mjs out",
     "oracle:fetch": "node scripts/fetch-oracle.mjs",
     "test": "vitest run",
@@ -31,6 +31,7 @@
     "vitest": "5.0.3"
   },
   "dependencies": {
+    "lamejs": "1.2.1",
     "next": "14.2.35",
     "react": "18.3.1",
     "react-dom": "18.3.1"

@@ -1,7 +1,10 @@
 import type { Intention, Style } from '../lib/auto';
 import type { ChainState } from '../lib/dsp';
 import type { WavFormat } from '../lib/engine';
-import type { AutoResult, EngineReply, EngineRequest, ExportResult, LoadResult, RenderResult } from './protocol';
+import type { AudioData, TrackMetrics } from '../lib/engine';
+import type { Measurer } from '../lib/export';
+import type { PeakInspection } from '../lib/meter';
+import type { AutoResult, EngineReply, EngineRequest, ExportResult, LoadResult, MasterResult, PlainAudio, RenderResult } from './protocol';
 
 export interface EngineCallbacks {
   onStatus?: (message: string) => void;
@@ -23,8 +26,15 @@ export interface EngineClient {
   /** Apply one of the reference engine's source-aware mastering styles. */
   preset(style: Style, intensity: number, loudnessTarget: number | null, renderSettings: ChainState, cb?: EngineCallbacks): Promise<AutoResult>;
   exportWav(format: WavFormat, dither: boolean, cb?: EngineCallbacks): Promise<ExportResult>;
+  /** Float copy of the last render, for the MP3 encoder. */
+  master(cb?: EngineCallbacks): Promise<MasterResult>;
+  /** Peak/loudness re-measurement in the worker, so verifying a decoded MP3 never blocks the UI. */
+  measurer: Measurer;
   dispose(): void;
 }
+
+/** Copy (the caller keeps its audio) into a cloneable shape. */
+const plain = (audio: AudioData): PlainAudio => ({ sampleRate: audio.sampleRate, channels: audio.channels.map(c => c.slice()) });
 
 /** Promise RPC over the engine worker. One request at a time is the UI's contract. */
 export function createEngineClient(): EngineClient {
@@ -63,6 +73,11 @@ export function createEngineClient(): EngineClient {
     preset: (style, intensity, loudnessTarget, renderSettings, cb) =>
       call<AutoResult>({ type: 'preset', style, intensity, loudnessTarget, renderSettings }, cb),
     exportWav: (format, dither, cb) => call<ExportResult>({ type: 'export', format, dither }, cb),
+    master: cb => call<MasterResult>({ type: 'master' }, cb),
+    measurer: {
+      verifyPeak: (audio, ceilingDbtp) => call<PeakInspection>({ type: 'verify-peak', audio: plain(audio), ceilingDbtp }),
+      analyze: audio => call<TrackMetrics>({ type: 'analyze', audio: plain(audio) }),
+    },
     dispose: () => worker.terminate(),
   };
 }

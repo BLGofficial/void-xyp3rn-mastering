@@ -103,21 +103,11 @@ export function OutputPanel(props: {
         <button type="button" data-testid="render" className="xr-button-primary w-full" disabled={!props.canRender || props.busy} onClick={props.onRender}>
           {props.busy ? 'Rendering…' : 'Render master'}
         </button>
-        {props.cancellable && (
+        {/* Renders get a full-screen overlay with its own Cancel; other operations cancel here. */}
+        {props.cancellable && !props.rendering && (
           <button type="button" data-testid="cancel" className="xr-button w-full" onClick={props.onCancel}>
             Cancel
           </button>
-        )}
-        {props.rendering && (
-          <div data-testid="render-orb" role="status" aria-label="Mastering in progress" className="xr-reveal relative overflow-hidden border border-gold-dim bg-black shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
-            <video autoPlay muted loop playsInline poster="/media/render-orb-poster.webp" aria-hidden className="aspect-video w-full object-cover motion-reduce:hidden">
-              <source src="/media/render-orb.mp4" type="video/mp4" />
-            </video>
-            <img src="/media/render-orb-poster.webp" alt="" aria-hidden className="hidden aspect-video w-full object-cover motion-reduce:block" />
-            <div className="absolute inset-x-0 bottom-0 bg-black/75 px-3 py-2 font-mono text-xs uppercase tracking-label text-gold">
-              Rendering master{props.progress === null ? '' : ` · ${Math.round(props.progress * 100)}%`}
-            </div>
-          </div>
         )}
         {props.progress !== null && (
           <progress className="block h-1 w-full" max={1} value={props.progress} aria-label="Render progress" />

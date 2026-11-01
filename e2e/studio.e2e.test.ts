@@ -10,10 +10,13 @@ import { chromium, type Browser, type Page } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { analyzeTrack, createBuffer, decodeWav, encodeWav } from '../lib/engine';
 import { serve } from '../scripts/serve-static.mjs';
+import { encodeFlac, encodeMp3 } from '../test/codec-fixtures';
 import { program } from '../test/signals';
 
 const RATE = 44100;
-let server: Server, browser: Browser, page: Page, url: string, wavPath: string;
+let server: Server, browser: Browser, page: Page, url: string, wavPath: string, flacPath: string, mp3Path: string, junkPath: string;
+/** The WAV import's readouts, for the lossless-FLAC comparison. */
+const wavReadings: Record<string, string> = {};
 const errors: string[] = [];
 
 /** Minimal stored-ZIP reader via the central directory; checks every CRC. */
@@ -66,8 +69,16 @@ beforeAll(async () => {
   // A realistic premaster: ~-20 LUFS programme with headroom, 6 s stereo.
   const src = createBuffer(RATE, 2, RATE * 6);
   program(RATE, 6, 2, 0.45).forEach((ch, c) => src.channels[c]!.set(ch));
-  wavPath = join(mkdtempSync(join(tmpdir(), 'xyp3rn-e2e-')), 'premaster.wav');
+  const dir = mkdtempSync(join(tmpdir(), 'xyp3rn-e2e-'));
+  wavPath = join(dir, 'premaster.wav');
   writeFileSync(wavPath, Buffer.from(await encodeWav(src, 'pcm24')));
+  // Same 24-bit PCM as the WAV, losslessly in FLAC; and a 48 kHz MP3 behind an ID3 tag.
+  flacPath = join(dir, 'premaster.flac');
+  writeFileSync(flacPath, encodeFlac(src.channels, RATE, 24));
+  mp3Path = join(dir, 'premaster-48k.mp3');
+  writeFileSync(mp3Path, encodeMp3(program(48000, 6, 2, 0.45), 48000, 320, 1024));
+  junkPath = join(dir, 'not-audio.mp3');
+  writeFileSync(junkPath, 'This is a text file renamed to .mp3, not audio.');
   browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
   page = await browser.newPage({ acceptDownloads: true, viewport: { width: 1440, height: 1000 } });
   page.on('pageerror', e => errors.push(`pageerror: ${e.message}`));
@@ -95,6 +106,8 @@ describe('XYP3RN MASTERING studio', () => {
     expect(lufs).toBeGreaterThan(-30);
     expect(lufs).toBeLessThan(-10);
     await numberIn('source-tp');
+    expect(await page.getByTestId('source-format').textContent()).toBe('44.1 kHz · 24-bit WAV · 2 ch');
+    for (const id of ['source-lufs', 'source-tp']) wavReadings[id] = (await page.getByTestId(id).textContent())!;
   });
 
   it('previews through the AudioWorklet chain with live metering', async () => {
@@ -206,6 +219,36 @@ describe('XYP3RN MASTERING studio', () => {
     const pages = Number(/\/Type \/Pages \/Count (\d+)/.exec(pdf)![1]);
     expect(pages).toBeGreaterThanOrEqual(2);
     expect(pdf.match(/\/Filter \/DCTDecode/g)).toHaveLength(pages);
+  });
+
+  it('imports FLAC losslessly: same readings as the WAV of the same PCM', async () => {
+    await page.getByTestId('file-input').setInputFiles(flacPath);
+    await page.getByTestId('source-format').filter({ hasText: 'FLAC' }).waitFor({ timeout: 60_000 });
+    expect(await page.getByTestId('source-format').textContent()).toBe('44.1 kHz · 24-bit FLAC · 2 ch');
+    for (const id of ['source-lufs', 'source-tp']) expect(await page.getByTestId(id).textContent(), id).toBe(wavReadings[id]);
+    expect(await page.getByTestId('lossy-note').count()).toBe(0);
+  });
+
+  it('imports MP3 at its native rate, flags it as lossy and masters it', async () => {
+    await page.getByTestId('file-input').setInputFiles(mp3Path);
+    await page.getByTestId('source-format').filter({ hasText: 'MP3' }).waitFor({ timeout: 60_000 });
+    expect(await page.getByTestId('source-format').textContent()).toBe('48 kHz · MP3 320 kbps · 2 ch');
+    expect(await page.getByTestId('lossy-note').isVisible()).toBe(true);
+    // 320 kbps keeps programme loudness within a fraction of a LU of the PCM it came from.
+    const pcm = createBuffer(48000, 2, 48000 * 6);
+    program(48000, 6, 2, 0.45).forEach((ch, c) => pcm.channels[c]!.set(ch));
+    const expected = (await analyzeTrack(pcm)).loudness.integratedLufs!;
+    expect(Math.abs((await numberIn('source-lufs')) - expected)).toBeLessThanOrEqual(0.3);
+    await page.getByTestId('target-select').selectOption('-14');
+    await page.getByTestId('render').click();
+    await page.getByTestId('report-status').filter({ hasText: /reached|limited/i }).waitFor({ timeout: 180_000 });
+    expect(await page.getByTestId('report-status').textContent()).toMatch(/reached/i);
+  });
+
+  it('refuses a file that is not WAV, FLAC or MP3, keeping the studio usable', async () => {
+    await page.getByTestId('file-input').setInputFiles(junkPath);
+    await page.getByRole('alert').filter({ hasText: /Unsupported file/ }).waitFor({ timeout: 20_000 });
+    expect(await page.getByTestId('file-input').isEnabled()).toBe(true);
   });
 
   it('raised no page or console errors', () => {

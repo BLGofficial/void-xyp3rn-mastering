@@ -2,6 +2,7 @@ import type { Intention, Style } from '../lib/auto';
 import type { ChainState } from '../lib/dsp';
 import type { WavFormat } from '../lib/engine';
 import type { AudioData, TrackMetrics } from '../lib/engine';
+import { decodeCompressed, sniffFile } from './import';
 import type { Measurer } from '../lib/export';
 import type { PeakInspection } from '../lib/meter';
 import type { AutoResult, EngineReply, EngineRequest, ExportResult, LoadResult, MasterResult, PlainAudio, RenderResult } from './protocol';
@@ -19,6 +20,7 @@ export class EngineFailure extends Error {
 }
 
 export interface EngineClient {
+  /** WAV is parsed in the worker; FLAC/MP3 are decoded by the platform first. */
   load(file: File, cb?: EngineCallbacks): Promise<LoadResult>;
   render(state: ChainState, cb?: EngineCallbacks): Promise<RenderResult>;
   /** Propose, render and safety-check an automatic master under the user's current output settings. */
@@ -66,7 +68,12 @@ export function createEngineClient(): EngineClient {
     });
 
   return {
-    load: (file, cb) => call<LoadResult>({ type: 'load', file }, cb),
+    load: async (file, cb) => {
+      if ((await sniffFile(file)) === 'wav') return call<LoadResult>({ type: 'load', file }, cb);
+      cb?.onStatus?.('Decoding...');
+      const { audio, info } = await decodeCompressed(file);
+      return call<LoadResult>({ type: 'load-pcm', audio, info }, cb);
+    },
     render: (state, cb) => call<RenderResult>({ type: 'render', state }, cb),
     auto: (intention, intensity, loudnessTarget, renderSettings, cb) =>
       call<AutoResult>({ type: 'auto', intention, intensity, loudnessTarget, renderSettings }, cb),

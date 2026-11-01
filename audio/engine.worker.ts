@@ -11,7 +11,7 @@ import {
 } from '../lib/engine';
 import type { SourceInfo } from '../lib/import';
 import type {
-  AutoResult, EngineReply, EngineRequest, ExportResult, LoadResult, MasterProvenance, MasterResult, PlainAudio, RenderResult,
+  AutoResult, EngineInbound, EngineReply, EngineRequest, ExportResult, LoadResult, MasterProvenance, MasterResult, PlainAudio, RenderResult,
 } from './protocol';
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -43,7 +43,7 @@ async function adopt(id: number, buffer: AudioData, metadata: SourceInfo, onStat
   return reply({ id, kind: 'done', result }, channels.map(c => c.buffer));
 }
 
-async function handle(id: number, request: EngineRequest) {
+async function handle(id: number, request: EngineRequest, signal: AbortSignal) {
   const onStatus = (message: string) => reply({ id, kind: 'status', message });
   const onProgress = (fraction: number) => reply({ id, kind: 'progress', fraction });
 
@@ -66,7 +66,7 @@ async function handle(id: number, request: EngineRequest) {
   if (!source || !sourceMetrics) throw Object.assign(new Error('Load a WAV first.'), { code: 'NO_SOURCE' });
 
   if (request.type === 'render') {
-    const out = await renderToTarget(source, request.state, { sourceMetrics, onStatus, onProgress });
+    const out = await renderToTarget(source, request.state, { sourceMetrics, onStatus, onProgress, signal });
     rendered = { buffer: out.buffer, metrics: out.metrics, state: out.state };
     const safety = evaluateSafety(sourceMetrics, out.metrics, out.state, { stats: out.buffer.processingStats });
     const result: RenderResult = { state: out.state, metrics: out.metrics, targetResult: out.targetResult, safety };
@@ -75,10 +75,10 @@ async function handle(id: number, request: EngineRequest) {
 
   if (request.type === 'auto') {
     onStatus('Auto: profiling tone...');
-    spectrum ??= await tonalProfile(source);
+    spectrum ??= await tonalProfile(source, { signal });
     const options = request.loudnessTarget === null ? {} : { loudnessTarget: request.loudnessTarget };
     const proposal = intent(source, sourceMetrics, request.intention, spectrum, request.intensity, options);
-    const out = await renderProposal(source, sourceMetrics, proposal, { renderSettings: request.renderSettings, onStatus, onProgress });
+    const out = await renderProposal(source, sourceMetrics, proposal, { renderSettings: request.renderSettings, onStatus, onProgress, signal });
     rendered = { buffer: out.buffer, metrics: out.metrics, state: out.state };
     const result: AutoResult = {
       state: out.state, metrics: out.metrics, safety: out.safety!, notes: out.notes,
@@ -91,7 +91,7 @@ async function handle(id: number, request: EngineRequest) {
     onStatus(`Preset: ${request.style}...`);
     let proposal = suggest(source, sourceMetrics, request.style, request.intensity);
     if (request.loudnessTarget !== null) proposal = withLoudnessTarget(proposal, request.loudnessTarget);
-    const out = await renderProposal(source, sourceMetrics, proposal, { renderSettings: request.renderSettings, onStatus, onProgress });
+    const out = await renderProposal(source, sourceMetrics, proposal, { renderSettings: request.renderSettings, onStatus, onProgress, signal });
     rendered = { buffer: out.buffer, metrics: out.metrics, state: out.state };
     const result: AutoResult = {
       state: out.state, metrics: out.metrics, safety: out.safety!, notes: out.notes,
@@ -109,16 +109,26 @@ async function handle(id: number, request: EngineRequest) {
   // PCM formats add a clipping check the float render didn't need.
   const safety = assertIntegrity(evaluateSafety(sourceMetrics, rendered.metrics, rendered.state, { format: request.format, stats: rendered.buffer.processingStats }));
   onStatus('Encoding...');
-  const bytes = await encodeWav(rendered.buffer, request.format, { dither: request.dither && request.format !== 'float32' });
+  const bytes = await encodeWav(rendered.buffer, request.format, { dither: request.dither && request.format !== 'float32', signal });
   const result: ExportResult = { bytes, safety, provenance: provenance(rendered.buffer) };
   reply({ id, kind: 'done', result }, [bytes]);
 }
 
-self.onmessage = async ({ data }: MessageEvent<{ id: number; request: EngineRequest }>) => {
+/** One controller per in-flight request; engine checkpoints yield, so a cancel lands mid-render. */
+const inFlight = new Map<number, AbortController>();
+
+self.onmessage = async ({ data }: MessageEvent<EngineInbound>) => {
+  if ('cancel' in data) return inFlight.get(data.cancel)?.abort();
+  const controller = new AbortController();
+  inFlight.set(data.id, controller);
   try {
-    await handle(data.id, data.request);
+    await handle(data.id, data.request, controller.signal);
   } catch (error) {
     const e = error as Error & { code?: string };
-    reply({ id: data.id, kind: 'error', code: e.code ?? 'ENGINE_FAILED', message: e.message });
+    // lib/auto mirrors the reference's uncoded cancellation error; give the UI one code for it.
+    const code = controller.signal.aborted ? 'CANCELLED' : e.code ?? 'ENGINE_FAILED';
+    reply({ id: data.id, kind: 'error', code, message: code === 'CANCELLED' ? 'Operation cancelled.' : e.message });
+  } finally {
+    inFlight.delete(data.id);
   }
 };

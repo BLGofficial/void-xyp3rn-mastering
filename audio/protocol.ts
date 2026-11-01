@@ -20,6 +20,9 @@ export type EngineRequest =
   | { type: 'verify-peak'; audio: PlainAudio; ceilingDbtp: number }
   | { type: 'analyze'; audio: PlainAudio };
 
+/** UI -> engine worker: a request, or a cancel for one still running. */
+export type EngineInbound = { id: number; request: EngineRequest } | { cancel: number };
+
 /** Audio that crosses the worker boundary. */
 export interface PlainAudio {
   sampleRate: number;

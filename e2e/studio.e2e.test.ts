@@ -221,6 +221,33 @@ describe('XYP3RN MASTERING studio', () => {
     expect(pdf.match(/\/Filter \/DCTDecode/g)).toHaveLength(pages);
   });
 
+  it('undoes an automatic master back to the chain it replaced', async () => {
+    const limiterOn = page.getByRole('article', { name: 'Brickwall Limiter' }).getByRole('button', { name: 'Brickwall Limiter on' });
+    if ((await limiterOn.getAttribute('aria-pressed')) === 'true') await limiterOn.click();
+    // The previous test's manual render committed its chain: nothing to undo yet.
+    expect(await page.getByTestId('auto-undo').isDisabled()).toBe(true);
+    await page.getByTestId('auto-run').click();
+    await page.getByText('Engine: auto master ready').waitFor({ timeout: 180_000 });
+    await expect(limiterOn.getAttribute('aria-pressed')).resolves.toBe('true');
+    await page.getByTestId('auto-undo').click();
+    // Previous chain back; the auto result no longer matches it, so it is not offered for export.
+    await expect(limiterOn.getAttribute('aria-pressed')).resolves.toBe('false');
+    expect(await page.getByTestId('report-status').count()).toBe(0);
+    expect(await page.getByTestId('auto-undo').isDisabled()).toBe(true);
+  });
+
+  it('cancels a running render and keeps the studio usable', async () => {
+    await page.getByRole('button', { name: '4x Studio' }).click();
+    await page.getByTestId('target-select').selectOption('-14');
+    await page.getByTestId('render').click();
+    await page.getByTestId('cancel').click();
+    await page.getByText('Engine: cancelled').waitFor({ timeout: 30_000 });
+    expect(await page.getByTestId('engine-error').count()).toBe(0);
+    expect(await page.getByTestId('cancel').count()).toBe(0);
+    expect(await page.getByTestId('render').isEnabled()).toBe(true);
+    await page.getByRole('button', { name: 'Standard' }).click();
+  });
+
   it('imports FLAC losslessly: same readings as the WAV of the same PCM', async () => {
     await page.getByTestId('file-input').setInputFiles(flacPath);
     await page.getByTestId('source-format').filter({ hasText: 'FLAC' }).waitFor({ timeout: 60_000 });

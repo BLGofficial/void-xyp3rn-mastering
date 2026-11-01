@@ -68,6 +68,9 @@ export function Studio() {
   const [match, setMatch] = useState(true);
   const [meters, setMeters] = useState<LiveMeters | null>(null);
   const [introReady, setIntroReady] = useState(false);
+  const [cancellable, setCancellable] = useState(false);
+  const [autoUndo, setAutoUndo] = useState<{ chain: ChainState; ceiling: number } | null>(null);
+  const abort = useRef<AbortController | null>(null);
 
   useEffect(() => {
     engine.current = createEngineClient();
@@ -117,7 +120,7 @@ export function Studio() {
 
   const onFile = useCallback(async (file: File) => {
     if (!engine.current) return;
-    setBusy(true); setError(null); setStored(null); setRenderedFile(null); setMeters(null);
+    setBusy(true); setError(null); setStored(null); setRenderedFile(null); setMeters(null); setAutoUndo(null);
     player.current?.dispose(); player.current = null; setPlaying(false); setPosition(0);
     try {
       const loaded = await engine.current.load(file, { onStatus: setStatus, onProgress: setProgress });
@@ -145,25 +148,44 @@ export function Studio() {
     else { await p.play(); setPlaying(true); }
   };
 
-  const render = async () => {
+  /**
+   * One engine operation at a time. Cancelling aborts it at the engine's next
+   * checkpoint and leaves whatever result and file were current before.
+   */
+  const operation = async (rendersAudio: boolean, body: (signal: AbortSignal) => Promise<void>) => {
     if (!engine.current || !source) return;
-    setBusy(true); setRendering(true); setError(null); setRenderedFile(null);
+    const controller = new AbortController();
+    abort.current = controller;
+    setBusy(true); setCancellable(true); setRendering(rendersAudio); setError(null);
     try {
-      const r = await engine.current.render(renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress });
-      setStored({ ...r, key: settingsKey(chain, target, ceiling) });
-      await prepareRenderedFile(chain, ceiling);
-      setStatus('Engine: rendered file ready');
+      await body(controller.signal);
     } catch (e) {
-      fail(e);
+      if (controller.signal.aborted || (e as { code?: string }).code === 'CANCELLED') setStatus('Engine: cancelled');
+      else fail(e);
     } finally {
-      setBusy(false); setRendering(false); setProgress(null);
+      abort.current = null;
+      setBusy(false); setCancellable(false); setRendering(false); setProgress(null);
     }
   };
 
-  const prepareRenderedFile = async (nextChain: ChainState, nextCeiling: number) => {
+  const cancel = () => {
+    abort.current?.abort();
+    engine.current?.cancel();
+  };
+
+  const render = () => operation(true, async signal => {
+    // A manual render commits to the current chain; Undo no longer applies.
+    setAutoUndo(null);
+    const r = await engine.current!.render(renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress });
+    setStored({ ...r, key: settingsKey(chain, target, ceiling) });
+    await prepareRenderedFile(chain, ceiling, signal);
+    setStatus('Engine: rendered file ready');
+  });
+
+  const prepareRenderedFile = async (nextChain: ChainState, nextCeiling: number, signal: AbortSignal) => {
     if (!engine.current || !source) return;
     const prepared = await prepareAudio(engine.current, {
-      format, dither, sourceFileName: source.fileName, ceilingDbtp: nextCeiling, targetLufs: target === 'off' ? null : Number(target),
+      format, dither, sourceFileName: source.fileName, ceilingDbtp: nextCeiling, targetLufs: target === 'off' ? null : Number(target), signal,
     }, { onStatus: setStatus, onProgress: setProgress });
     setRenderedFile({
       key: artifactKey(nextChain, target, nextCeiling, format, dither),
@@ -175,72 +197,56 @@ export function Studio() {
   };
 
   /** Re-encode the current render for a changed format/dither, without re-rendering. */
-  const prepareCurrent = async () => {
+  const prepareCurrent = () => operation(false, async signal => {
     if (!result) return;
-    setBusy(true); setError(null);
-    try {
-      await prepareRenderedFile(chain, ceiling);
-      setStatus('Engine: rendered file ready');
-    } catch (e) {
-      fail(e);
-    } finally {
-      setBusy(false); setProgress(null);
-    }
-  };
+    await prepareRenderedFile(chain, ceiling, signal);
+    setStatus('Engine: rendered file ready');
+  });
 
-  const downloadReport = async () => {
-    if (!engine.current || !source || !result || !currentRenderedFile) return;
-    setBusy(true); setError(null);
-    try {
-      const file = await bundleReport(engine.current, currentRenderedFile.prepared, {
-        dither, targetLufs: target === 'off' ? null : Number(target),
-        source: { fileName: source.fileName, metrics: source.metrics, sampleRate: source.sampleRate, channels: source.metadata.channels, duration: source.metadata.length / source.sampleRate },
-        render: { state: result.state, safety: result.safety, targetResult: result.targetResult },
-      }, { onStatus: setStatus });
-      download(file.blob, file.filename);
-      setStatus('Engine: report bundled');
-    } catch (e) {
-      fail(e);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const downloadReport = () => operation(false, async signal => {
+    if (!source || !result || !currentRenderedFile) return;
+    const file = await bundleReport(engine.current!, currentRenderedFile.prepared, {
+      dither, targetLufs: target === 'off' ? null : Number(target), signal,
+      source: { fileName: source.fileName, metrics: source.metrics, sampleRate: source.sampleRate, channels: source.metadata.channels, duration: source.metadata.length / source.sampleRate },
+      render: { state: result.state, safety: result.safety, targetResult: result.targetResult },
+    }, { onStatus: setStatus });
+    download(file.blob, file.filename);
+    setStatus('Engine: report bundled');
+  });
 
-  const acceptAutomaticResult = async (r: AutoResult, readyStatus: string) => {
+  const acceptAutomaticResult = async (r: AutoResult, readyStatus: string, signal: AbortSignal) => {
     const { loudnessTarget: _t, ...musical } = r.state;
     const nextChain: ChainState = { ...musical, outputCeilingDbtp: null };
     const nextCeiling = r.state.outputCeilingDbtp ?? ceiling;
+    // What Undo puts back: the user's own chain and ceiling from before this proposal.
+    setAutoUndo({ chain, ceiling });
     setChain(nextChain);
     setCeiling(nextCeiling);
     setStored({ ...r, key: settingsKey(nextChain, target, nextCeiling) });
-    await prepareRenderedFile(nextChain, nextCeiling);
+    await prepareRenderedFile(nextChain, nextCeiling, signal);
     setStatus(readyStatus);
   };
 
-  const runAuto = async () => {
-    if (!engine.current) return;
-    setBusy(true); setRendering(true); setError(null); setRenderedFile(null);
-    try {
-      const r = await engine.current.auto(intention, autoIntensity, target === 'off' ? null : Number(target), renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress });
-      await acceptAutomaticResult(r, 'Engine: auto master ready');
-    } catch (e) {
-      fail(e);
-    } finally {
-      setBusy(false); setRendering(false); setProgress(null);
-    }
-  };
+  const runAuto = () => operation(true, async signal => {
+    const r = await engine.current!.auto(intention, autoIntensity, target === 'off' ? null : Number(target), renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress });
+    await acceptAutomaticResult(r, 'Engine: auto master ready', signal);
+  });
 
-  const runPreset = async (style: Style) => {
-    if (!engine.current) return;
-    setBusy(true); setRendering(true); setError(null); setRenderedFile(null);
-    try {
-      const r = await engine.current.preset(style, 50, target === 'off' ? null : Number(target), renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress });
-      await acceptAutomaticResult(r, `Engine: ${style} preset ready`);
-    } catch (e) {
-      fail(e);
-    } finally {
-      setBusy(false); setRendering(false); setProgress(null);
-    }
+  const runPreset = (style: Style) => operation(true, async signal => {
+    const r = await engine.current!.preset(style, 50, target === 'off' ? null : Number(target), renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress });
+    await acceptAutomaticResult(r, `Engine: ${style} preset ready`, signal);
+  });
+
+  /**
+   * Restore the chain the last Auto/preset replaced. Its render stays in the
+   * engine but no longer matches the chain, so it is hidden until re-rendered.
+   */
+  const undoAuto = () => {
+    if (!autoUndo) return;
+    setChain(autoUndo.chain);
+    setCeiling(autoUndo.ceiling);
+    setAutoUndo(null);
+    setStatus('Engine: auto undone. Render to hear the restored chain');
   };
 
   const duration = source ? source.metadata.length / source.sampleRate : 0;
@@ -255,7 +261,7 @@ export function Studio() {
             </p>
           )}
           {error && (
-            <div role="alert" className="border border-gold-dim bg-gold-glow px-4 py-3 text-sm text-cloud">{error}</div>
+            <div role="alert" data-testid="engine-error" className="border border-gold-dim bg-gold-glow px-4 py-3 text-sm text-cloud">{error}</div>
           )}
           <SourcePanel fileName={source?.fileName} fileSize={source?.fileSize} metadata={source?.metadata} metrics={source?.metrics} busy={busy} onFile={onFile} />
           {source && (
@@ -281,13 +287,13 @@ export function Studio() {
         <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
           <AutoPanel
             intention={intention} onIntention={setIntention} intensity={autoIntensity} onIntensity={setAutoIntensity}
-            canRun={!!source} busy={busy} onRun={runAuto} onPreset={runPreset} notes={result?.notes ?? null}
+            canRun={!!source} busy={busy} onRun={runAuto} onPreset={runPreset} canUndo={!!autoUndo} onUndo={undoAuto} notes={result?.notes ?? null}
           />
           <OutputPanel
             target={target} onTarget={setTarget} ceiling={ceiling} onCeiling={setCeiling} format={format} onFormat={setFormat}
             dither={dither} onDither={setDither} canRender={!!source} busy={busy} rendering={rendering} progress={progress}
             onRender={render} result={result} renderedFile={currentRenderedFile}
-            onPrepare={prepareCurrent} onReport={downloadReport}
+            onPrepare={prepareCurrent} onReport={downloadReport} cancellable={cancellable} onCancel={cancel}
           />
           <p className="mt-3 font-mono text-xs uppercase tracking-label text-muted">Suggests — never decides. You keep the final call.</p>
         </aside>

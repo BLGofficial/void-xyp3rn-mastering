@@ -5,7 +5,7 @@ import type { AudioData, TrackMetrics } from '../lib/engine';
 import { decodeCompressed, sniffFile } from './import';
 import type { Measurer } from '../lib/export';
 import type { PeakInspection } from '../lib/meter';
-import type { AutoResult, EngineReply, EngineRequest, ExportResult, LoadResult, MasterResult, PlainAudio, RenderResult } from './protocol';
+import type { AutoResult, EngineInbound, EngineReply, EngineRequest, ExportResult, LoadResult, MasterResult, PlainAudio, RenderResult } from './protocol';
 
 export interface EngineCallbacks {
   onStatus?: (message: string) => void;
@@ -32,6 +32,8 @@ export interface EngineClient {
   master(cb?: EngineCallbacks): Promise<MasterResult>;
   /** Peak/loudness re-measurement in the worker, so verifying a decoded MP3 never blocks the UI. */
   measurer: Measurer;
+  /** Abort every in-flight request; each rejects with code CANCELLED. */
+  cancel(): void;
   dispose(): void;
 }
 
@@ -64,7 +66,7 @@ export function createEngineClient(): EngineClient {
     new Promise<T>((resolve, reject) => {
       const id = nextId++;
       pending.set(id, { resolve: resolve as (v: never) => void, reject, cb });
-      worker.postMessage({ id, request });
+      worker.postMessage({ id, request } satisfies EngineInbound);
     });
 
   return {
@@ -85,6 +87,7 @@ export function createEngineClient(): EngineClient {
       verifyPeak: (audio, ceilingDbtp) => call<PeakInspection>({ type: 'verify-peak', audio: plain(audio), ceilingDbtp }),
       analyze: audio => call<TrackMetrics>({ type: 'analyze', audio: plain(audio) }),
     },
+    cancel: () => { for (const id of pending.keys()) worker.postMessage({ cancel: id } satisfies EngineInbound); },
     dispose: () => worker.terminate(),
   };
 }

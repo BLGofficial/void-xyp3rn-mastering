@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import type { TrackMetrics, WavInfo } from '@/lib/engine';
+import type { TrackMetrics } from '@/lib/engine';
+import type { SourceInfo } from '@/lib/import';
 import { bytes, num, time } from './format';
 import { Panel, Readout } from './ui';
 
@@ -15,9 +16,17 @@ const FLAG_TEXT: Record<string, string> = {
   'possibly-already-mastered': 'Looks already mastered. Go light.',
 };
 
+const ACCEPT = '.wav,.flac,.mp3,audio/wav,audio/x-wav,audio/wave,audio/flac,audio/x-flac,audio/mpeg';
+
+/** "24-bit WAV", "32-bit float WAV", "16-bit FLAC", "MP3 320 kbps". */
+export function formatLabel(m: SourceInfo): string {
+  if (m.container === 'mp3') return `MP3${m.bitrateKbps ? ` ${m.bitrateKbps} kbps` : ''}`;
+  return `${m.bitsPerSample}-bit${m.float ? ' float' : ''} ${m.container.toUpperCase()}`;
+}
+
 /** File intake (drop or browse) plus the source's measured profile. */
 export function SourcePanel({ fileName, fileSize, metadata, metrics, busy, onFile }: {
-  fileName?: string; fileSize?: number; metadata?: WavInfo; metrics?: TrackMetrics; busy: boolean; onFile: (file: File) => void;
+  fileName?: string; fileSize?: number; metadata?: SourceInfo; metrics?: TrackMetrics; busy: boolean; onFile: (file: File) => void;
 }) {
   const [over, setOver] = useState(false);
   const pick = (files: FileList | null) => {
@@ -25,7 +34,7 @@ export function SourcePanel({ fileName, fileSize, metadata, metrics, busy, onFil
     if (file) onFile(file);
   };
   return (
-    <Panel title="Source" aside={metadata && <span className="font-mono text-xs text-muted">{metadata.sampleRate / 1000} kHz · {metadata.bitsPerSample}-bit · {metadata.channels} ch</span>}>
+    <Panel title="Source" aside={metadata && <span className="font-mono text-xs text-muted"><span data-testid="source-format">{metadata.sampleRate / 1000} kHz · {formatLabel(metadata)} · {metadata.channels} ch</span></span>}>
       <label
         className={`xr-dropzone flex cursor-pointer flex-col items-center justify-center gap-1 border border-dashed px-4 py-6 text-center ${
           over ? 'border-gold bg-gold-glow' : 'border-line-card bg-surface hover:border-gold-dim'
@@ -34,12 +43,12 @@ export function SourcePanel({ fileName, fileSize, metadata, metrics, busy, onFil
         onDragLeave={() => setOver(false)}
         onDrop={e => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files); }}
       >
-        <span className="font-heading text-sm font-bold text-cloud">{fileName ?? 'Drop a WAV or browse'}</span>
+        <span className="font-heading text-sm font-bold text-cloud">{fileName ?? 'Drop a WAV, FLAC or MP3, or browse'}</span>
         <span className="font-mono text-xs text-ash">
-          {fileSize ? bytes(fileSize) : '16/24/32-bit PCM or 32-bit float · up to 8 channels'}
+          {fileSize ? bytes(fileSize) : 'WAV 16/24/32-bit or float · FLAC · MP3 · up to 8 channels'}
         </span>
         <input
-          data-testid="file-input" type="file" accept=".wav,audio/wav,audio/x-wav,audio/wave" className="sr-only" disabled={busy}
+          data-testid="file-input" type="file" accept={ACCEPT} className="sr-only" disabled={busy}
           onChange={e => { pick(e.currentTarget.files); e.currentTarget.value = ''; }}
         />
       </label>
@@ -54,6 +63,11 @@ export function SourcePanel({ fileName, fileSize, metadata, metrics, busy, onFil
             <Readout label="Correlation" value={num(metrics.correlation, 2)} />
             <Readout label="Length" value={time(metadata ? metadata.length / metadata.sampleRate : 0)} />
           </div>
+          {metadata?.lossy && (
+            <p data-testid="lossy-note" className="mt-4 border-t border-line pt-3 text-xs text-ash">
+              <span aria-hidden className="text-gold">▸ </span>Lossy MP3 source. Mastering can&apos;t restore what the codec removed; master from the WAV or FLAC if you have it.
+            </p>
+          )}
           {metrics.sourceQuality.flags.length > 0 && (
             <ul className="mt-4 space-y-1 border-t border-line pt-3 text-xs text-ash">
               {metrics.sourceQuality.flags.map(f => (

@@ -9,6 +9,7 @@ import {
   analyzeTrack, assertIntegrity, createBuffer, decodeWav, encodeWav, evaluateSafety, preflightWav, renderToTarget, verifyPeak,
   type AudioData, type TrackMetrics,
 } from '../lib/engine';
+import type { SourceInfo } from '../lib/import';
 import type {
   AutoResult, EngineReply, EngineRequest, ExportResult, LoadResult, MasterProvenance, MasterResult, PlainAudio, RenderResult,
 } from './protocol';
@@ -31,6 +32,17 @@ const provenance = (b: AudioData): MasterProvenance => ({ duration: b.duration, 
 
 const reply = (message: EngineReply, transfer: Transferable[] = []) => self.postMessage(message, transfer);
 
+/** Make decoded audio the current source: analyse it, reset renders, hand the UI a playback copy. */
+async function adopt(id: number, buffer: AudioData, metadata: SourceInfo, onStatus: (m: string) => void) {
+  onStatus('Analysing source...');
+  const metrics = await analyzeTrack(buffer);
+  source = buffer; sourceMetrics = metrics; rendered = null; spectrum = null;
+  // The UI needs its own copy for playback; the worker keeps the original for rendering.
+  const channels = buffer.channels.map(c => c.slice());
+  const result: LoadResult = { metadata, sampleRate: buffer.sampleRate, channels, metrics };
+  return reply({ id, kind: 'done', result }, channels.map(c => c.buffer));
+}
+
 async function handle(id: number, request: EngineRequest) {
   const onStatus = (message: string) => reply({ id, kind: 'status', message });
   const onProgress = (fraction: number) => reply({ id, kind: 'progress', fraction });
@@ -40,14 +52,12 @@ async function handle(id: number, request: EngineRequest) {
     await preflightWav(request.file);
     onStatus('Decoding...');
     const { buffer, metadata } = await decodeWav(await request.file.arrayBuffer(), { onProgress });
-    onStatus('Analysing source...');
-    const metrics = await analyzeTrack(buffer);
-    source = buffer; sourceMetrics = metrics; rendered = null; spectrum = null;
-    // The UI needs its own copy for playback; the worker keeps the original for rendering.
-    const channels = buffer.channels.map(c => c.slice());
-    const result: LoadResult = { metadata, sampleRate: buffer.sampleRate, channels, metrics };
-    return reply({ id, kind: 'done', result }, channels.map(c => c.buffer));
+    return adopt(id, buffer, {
+      container: 'wav', sampleRate: metadata.sampleRate, channels: metadata.channels, length: metadata.length, bitsPerSample: metadata.bitsPerSample,
+      float: metadata.audioFormat === 3, lossy: false, bitrateKbps: null, channelMask: metadata.channelMask,
+    }, onStatus);
   }
+  if (request.type === 'load-pcm') return adopt(id, fromPlain(request.audio), request.info, onStatus);
 
   // Stateless measurements of audio the UI thread decoded (MP3 verification).
   if (request.type === 'verify-peak') return reply({ id, kind: 'done', result: await verifyPeak(fromPlain(request.audio), request.ceilingDbtp) });

@@ -3,11 +3,14 @@
 
 import type { Intention, Style } from '../lib/auto';
 import type { ChainState } from '../lib/dsp';
-import type { PeakGuard, ProcessingStats, SafetyResult, TargetResult, TrackMetrics, WavFormat, WavInfo } from '../lib/engine';
+import type { PeakGuard, ProcessingStats, SafetyResult, TargetResult, TrackMetrics, WavFormat } from '../lib/engine';
+import type { SourceInfo } from '../lib/import';
 import type { MeterReadings, PeakInspection } from '../lib/meter';
 
 export type EngineRequest =
   | { type: 'load'; file: File }
+  /** A FLAC/MP3 source the UI thread already decoded. */
+  | { type: 'load-pcm'; audio: PlainAudio; info: SourceInfo }
   | { type: 'render'; state: ChainState }
   | { type: 'auto'; intention: Intention; intensity: number | null; loudnessTarget: number | null; renderSettings: ChainState }
   | { type: 'preset'; style: Style; intensity: number; loudnessTarget: number | null; renderSettings: ChainState }
@@ -33,7 +36,7 @@ export interface MasterProvenance {
 export interface MasterResult extends PlainAudio, MasterProvenance {}
 
 export interface LoadResult {
-  metadata: WavInfo;
+  metadata: SourceInfo;
   sampleRate: number;
   channels: Float32Array[];
   metrics: TrackMetrics;

@@ -127,6 +127,11 @@ describe('XYP3RN MASTERING studio', () => {
     await page.getByTestId('dither').check();
     await page.getByTestId('render').click();
     await page.getByTestId('render-orb').waitFor();
+    // The render takes over the whole viewport, with Cancel focused as its way out.
+    const viewport = page.viewportSize()!;
+    expect(await page.getByTestId('render-orb').boundingBox()).toMatchObject({ x: 0, y: 0, width: viewport.width, height: viewport.height });
+    expect(await page.getByTestId('render-orb').getAttribute('role')).toBe('dialog');
+    await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('cancel');
     await page.getByTestId('report-status').filter({ hasText: /reached|limited/i }).waitFor({ timeout: 180_000 });
     await page.getByTestId('rendered-file-name').waitFor({ timeout: 60_000 });
     expect(await page.getByTestId('render-orb').count()).toBe(0);
@@ -250,9 +255,19 @@ describe('XYP3RN MASTERING studio', () => {
   it('cancels a running render and keeps the studio usable', async () => {
     await page.getByRole('button', { name: '4x Studio' }).click();
     await page.getByTestId('target-select').selectOption('-14');
+    // Esc is the overlay's escape route...
     await page.getByTestId('render').click();
-    await page.getByTestId('cancel').click();
+    await page.getByTestId('render-orb').waitFor();
+    await page.keyboard.press('Escape');
     await page.getByText('Engine: cancelled').waitFor({ timeout: 30_000 });
+    expect(await page.getByTestId('render-orb').count()).toBe(0);
+    // ...and so is its Cancel button.
+    await page.getByTestId('render').click();
+    await page.getByTestId('render-orb').waitFor();
+    await page.getByTestId('cancel').click();
+    // The status already read 'cancelled' from the Esc round: wait for the overlay itself to close.
+    await page.getByTestId('render-orb').waitFor({ state: 'detached', timeout: 30_000 });
+    expect(await page.getByRole('banner').textContent()).toMatch(/Engine: cancelled/);
     expect(await page.getByTestId('engine-error').count()).toBe(0);
     expect(await page.getByTestId('cancel').count()).toBe(0);
     expect(await page.getByTestId('render').isEnabled()).toBe(true);

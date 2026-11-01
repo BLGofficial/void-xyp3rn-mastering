@@ -13,6 +13,7 @@ import { Header } from './Header';
 import { OutputPanel, type RenderedFile } from './OutputPanel';
 import { SourcePanel } from './SourcePanel';
 import { Transport } from './Transport';
+import { RenderOverlay } from './RenderOverlay';
 import { Panel } from './ui';
 import { Waveform } from './Waveform';
 
@@ -264,6 +265,7 @@ export function Studio() {
   return (
     <div className="min-h-screen">
       <Header status={status} />
+      <RenderOverlay open={rendering} status={status} progress={progress} onCancel={cancel} />
       <main ref={studio} className={`mx-auto grid max-w-[1440px] gap-4 px-4 pb-10 pt-4 md:px-8 lg:grid-cols-[minmax(0,1fr)_360px] ${introReady ? 'xr-studio-intro' : ''}`}>
         <div className="min-w-0 space-y-4">
           {!source && (

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createEngineClient, type EngineClient } from '@/audio/engine-client';
-import { bundleReport, prepareAudio, type ExportFormat, type PreparedAudio } from '@/audio/export-flow';
+import { buildReportPdf, bundleReport, prepareAudio, type ExportFormat, type PreparedAudio } from '@/audio/export-flow';
 import { createPlayer, type Player } from '@/audio/player';
 import type { AutoResult, LiveMeters, LoadResult, RenderResult } from '@/audio/protocol';
 import type { Intention, Style } from '@/lib/auto';
@@ -153,7 +153,8 @@ export function Studio() {
    * checkpoint and leaves whatever result and file were current before.
    */
   const operation = async (rendersAudio: boolean, body: (signal: AbortSignal) => Promise<void>) => {
-    if (!engine.current || !source) return;
+    // One at a time: an overlapping operation would clear `busy` under the first and race its result.
+    if (!engine.current || !source || abort.current) return;
     const controller = new AbortController();
     abort.current = controller;
     setBusy(true); setCancellable(true); setRendering(rendersAudio); setError(null);
@@ -203,15 +204,25 @@ export function Studio() {
     setStatus('Engine: rendered file ready');
   });
 
+  const reportRequest = (signal: AbortSignal) => ({
+    dither, targetLufs: target === 'off' ? null : Number(target), signal,
+    source: { fileName: source!.fileName, metrics: source!.metrics, sampleRate: source!.sampleRate, channels: source!.metadata.channels, duration: source!.metadata.length / source!.sampleRate },
+    render: { state: result!.state, safety: result!.safety, targetResult: result!.targetResult },
+  });
+
   const downloadReport = () => operation(false, async signal => {
-    if (!source || !result || !currentRenderedFile) return;
-    const file = await bundleReport(engine.current!, currentRenderedFile.prepared, {
-      dither, targetLufs: target === 'off' ? null : Number(target), signal,
-      source: { fileName: source.fileName, metrics: source.metrics, sampleRate: source.sampleRate, channels: source.metadata.channels, duration: source.metadata.length / source.sampleRate },
-      render: { state: result.state, safety: result.safety, targetResult: result.targetResult },
-    }, { onStatus: setStatus });
+    if (!result || !currentRenderedFile) return;
+    const file = await bundleReport(engine.current!, currentRenderedFile.prepared, reportRequest(signal), { onStatus: setStatus });
     download(file.blob, file.filename);
     setStatus('Engine: report bundled');
+  });
+
+  /** The audio link downloads natively; its PDF report follows as a second file. */
+  const downloadEffectsPdf = () => operation(false, async signal => {
+    if (!result || !currentRenderedFile) return;
+    const file = await buildReportPdf(engine.current!, currentRenderedFile.prepared, reportRequest(signal), { onStatus: setStatus });
+    download(file.blob, file.filename);
+    setStatus('Engine: exported with PDF report');
   });
 
   const acceptAutomaticResult = async (r: AutoResult, readyStatus: string, signal: AbortSignal) => {
@@ -293,7 +304,7 @@ export function Studio() {
             target={target} onTarget={setTarget} ceiling={ceiling} onCeiling={setCeiling} format={format} onFormat={setFormat}
             dither={dither} onDither={setDither} canRender={!!source} busy={busy} rendering={rendering} progress={progress}
             onRender={render} result={result} renderedFile={currentRenderedFile}
-            onPrepare={prepareCurrent} onReport={downloadReport} cancellable={cancellable} onCancel={cancel}
+            onPrepare={prepareCurrent} onReport={downloadReport} onAudioDownload={downloadEffectsPdf} cancellable={cancellable} onCancel={cancel}
           />
           <p className="mt-3 font-mono text-xs uppercase tracking-label text-muted">Suggests — never decides. You keep the final call.</p>
         </aside>

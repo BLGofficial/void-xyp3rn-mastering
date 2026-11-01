@@ -78,8 +78,8 @@ export interface ReportRequest {
 
 export interface ExportFile { blob: Blob; filename: string }
 
-/** ZIP of the prepared audio and a PDF report measured from that same file. */
-export async function bundleReport(engine: EngineClient, audio: PreparedAudio, req: ReportRequest, cb: EngineCallbacks = {}): Promise<ExportFile> {
+/** PDF report of the effects and measurements behind the prepared audio, measured from that same file. */
+export async function buildReportPdf(engine: EngineClient, audio: PreparedAudio, req: ReportRequest, cb: EngineCallbacks = {}): Promise<ExportFile> {
   let master = audio.metrics;
   if (!master) {
     cb.onStatus?.('Measuring the exported file...');
@@ -113,8 +113,13 @@ export async function bundleReport(engine: EngineClient, audio: PreparedAudio, r
     peakGuard: audio.provenance.peakGuard,
     codecVerification: audio.codecVerification,
   });
-  const pdf = assemblePdf(await renderReportPages(report, req.signal));
+  return { blob: assemblePdf(await renderReportPages(report, req.signal)), filename: audio.filename.replace(/\.(wav|mp3)$/, '_report.pdf') };
+}
+
+/** ZIP of the prepared audio and its PDF report. */
+export async function bundleReport(engine: EngineClient, audio: PreparedAudio, req: ReportRequest, cb: EngineCallbacks = {}): Promise<ExportFile> {
+  const pdf = await buildReportPdf(engine, audio, req, cb);
   cb.onStatus?.('Bundling...');
-  const bundle = await zip([{ name: audio.filename, data: audio.blob }, { name: REPORT_FILENAME, data: pdf }], date, req.signal);
+  const bundle = await zip([{ name: audio.filename, data: audio.blob }, { name: REPORT_FILENAME, data: pdf.blob }], new Date().toISOString(), req.signal);
   return { blob: bundle, filename: `${baseName(req.source.fileName)}_XYP3RN_${targetTag(req.targetLufs)}_report.zip` };
 }

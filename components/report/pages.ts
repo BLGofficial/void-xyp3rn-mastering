@@ -2,9 +2,8 @@
 // for lib/export's assemblePdf. Brand: gold mark on Studio Black only.
 
 import { MARK_PATH } from '@/components/brand/mark-path';
-import { DEFINITIONS } from '@/lib/dsp';
 import { check } from '@/lib/engine/errors';
-import { PAGE_HEIGHT_PX as H, PAGE_WIDTH_PX as W, type Report } from '@/lib/export';
+import { effectsSummary, PAGE_HEIGHT_PX as H, PAGE_WIDTH_PX as W, type Report } from '@/lib/export';
 
 const C = { bg: '#080808', panel: '#0D0D0D', line: '#222222', gold: '#FACD68', cloud: '#E8E8E8', ash: '#888888', muted: '#444444' };
 const MARGIN = 72, BODY_W = W - MARGIN * 2, BOTTOM = H - 130;
@@ -155,19 +154,21 @@ export async function renderReportPages(report: Report, signal?: AbortSignal): P
   for (const note of report.notes) await text(note, 20);
   for (const w of report.safety.warnings) await text(`Check: ${String(w.code).toLowerCase().replace(/_/g, ' ')}${w.introduced ? '' : ' (present in the source)'}`, 20, C.gold);
 
-  await section('03', 'PROCESSING CHAIN');
-  await text('Settings as applied, in signal order. Bypassed modules are listed but did not touch the audio. The source file is unchanged.', 20);
-  const chain = report.chain;
-  if (chain.loudnessTarget) {
-    await text(`Loudness stage: target ${chain.loudnessTarget.targetLufs} LUFS, output correction ${fmt(chain.loudnessTarget.correctionDb, 3)} dB — applied once, after the processors and before peak protection.`, 20);
+  await section('03', 'EFFECTS APPLIED');
+  const effects = effectsSummary(report.chain);
+  await text('What this master went through, in signal order. The source file is unchanged.', 20);
+  if (!effects.applied.length) await text('No effects were applied: the master is the source at the output stage below.', 20, C.ash);
+  for (const [i, e] of effects.applied.entries()) {
+    await room(96);
+    y += 8;
+    await text(`${String(i + 1).padStart(2, '0')}  ${e.name.toUpperCase()}`, 22, C.gold, f.mono);
+    await text(e.settings.join('  ·  '), 18, C.cloud, f.mono);
   }
-  await text(`Quality ${chain.quality} · ceiling ${chain.outputCeilingDbtp ?? 'off'} dBTP · dither ${report.dither ? 'on' : 'off'} (PCM only).`, 18, C.ash, f.mono);
-  for (const [i, p] of chain.processors.entries()) {
-    await room(110);
-    y += 10;
-    await text(`${String(i + 1).padStart(2, '0')}  ${(DEFINITIONS[p.id]?.name ?? p.id).toUpperCase()}  ·  ${p.bypassed ? 'BYPASSED' : 'ACTIVE'}`, 22, p.bypassed ? C.ash : C.gold, f.mono);
-    await text(Object.entries(p.parameters).map(([k, v]) => `${k} ${typeof v === 'number' ? Number(v.toFixed(4)) : v}`).join('  ·  '), 17, p.bypassed ? C.ash : C.cloud, f.mono);
-  }
+  y += 8;
+  await text('Output stage', 22, C.gold, f.mono);
+  for (const line of effects.output) await text(line, 18, C.cloud, f.mono);
+  await text(`Dither: ${report.dither ? 'TPDF at the final PCM quantisation' : 'off'}.`, 18, C.cloud, f.mono);
+  if (effects.bypassed.length) await text(`In the chain but bypassed (did not touch the audio): ${effects.bypassed.join(', ')}.`, 18, C.ash);
 
   await section('04', 'VERIFICATION');
   const stats = report.processingStats, guard = report.peakGuard, codec = report.codecVerification;

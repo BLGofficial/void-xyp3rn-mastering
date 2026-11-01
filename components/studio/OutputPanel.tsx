@@ -59,6 +59,8 @@ export function OutputPanel(props: {
   onPrepare: () => void;
   /** Download the rendered file with a PDF mastering report, as a ZIP. */
   onReport: () => void;
+  /** Fired when the audio link is clicked: the PDF report follows the native download. */
+  onAudioDownload: () => void;
   /** An engine operation is running and can be stopped. */
   cancellable: boolean; onCancel: () => void;
 }) {
@@ -158,8 +160,12 @@ export function OutputPanel(props: {
                 <p className="font-mono text-xs text-muted">{(props.renderedFile.size / 1_000_000).toFixed(1)} MB</p>
               </div>
               <audio data-testid="rendered-audio" className="w-full" controls preload="metadata" src={props.renderedFile.url} />
-              <a data-testid="export" className="xr-button block w-full text-center" href={props.renderedFile.url} download={props.renderedFile.name}>
-                Download {props.renderedFile.name.endsWith('.mp3') ? 'MP3' : 'WAV'}
+              <a
+                data-testid="export" href={props.renderedFile.url} download={props.renderedFile.name} onClick={props.onAudioDownload}
+                // Links can't be disabled; match the buttons while an operation runs.
+                aria-disabled={props.busy} className={`xr-button block w-full text-center ${props.busy ? 'pointer-events-none opacity-50' : ''}`}
+              >
+                Download {props.renderedFile.name.endsWith('.mp3') ? 'MP3' : 'WAV'} + PDF report
               </a>
               <button type="button" data-testid="report-bundle" className="xr-button w-full" disabled={props.busy} onClick={props.onReport}>
                 Download with PDF report (ZIP)

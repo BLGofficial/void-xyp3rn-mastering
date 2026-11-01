@@ -59,6 +59,8 @@ export function OutputPanel(props: {
   onPrepare: () => void;
   /** Download the rendered file with a PDF mastering report, as a ZIP. */
   onReport: () => void;
+  /** An engine operation is running and can be stopped. */
+  cancellable: boolean; onCancel: () => void;
 }) {
   const { result } = props;
   const status = result?.targetResult?.status ?? (result ? 'rendered' : null);
@@ -99,6 +101,11 @@ export function OutputPanel(props: {
         <button type="button" data-testid="render" className="xr-button-primary w-full" disabled={!props.canRender || props.busy} onClick={props.onRender}>
           {props.busy ? 'Rendering…' : 'Render master'}
         </button>
+        {props.cancellable && (
+          <button type="button" data-testid="cancel" className="xr-button w-full" onClick={props.onCancel}>
+            Cancel
+          </button>
+        )}
         {props.rendering && (
           <div data-testid="render-orb" role="status" aria-label="Mastering in progress" className="xr-reveal relative overflow-hidden border border-gold-dim bg-black shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
             <video autoPlay muted loop playsInline poster="/media/render-orb-poster.webp" aria-hidden className="aspect-video w-full object-cover motion-reduce:hidden">

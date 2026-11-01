@@ -25,6 +25,7 @@ export interface PrepareRequest {
   sourceFileName: string;
   ceilingDbtp: number;
   targetLufs: number | null;
+  signal?: AbortSignal;
 }
 
 /** The deliverable audio for the current render, plus what the report needs about it. */
@@ -56,7 +57,7 @@ export async function prepareAudio(engine: EngineClient, req: PrepareRequest, cb
   };
   cb.onStatus?.(`Encoding MP3 ${bitrate} kbps...`);
   const checked = await encodeCheckedMp3(buffer, browserMp3Codec, {
-    bitrate, ceilingDbtp: req.ceilingDbtp, targetLufs: req.targetLufs,
+    bitrate, ceilingDbtp: req.ceilingDbtp, targetLufs: req.targetLufs, signal: req.signal,
     measure: engine.measurer, onStatus: cb.onStatus, onProgress: cb.onProgress,
   });
   return {
@@ -72,6 +73,7 @@ export interface ReportRequest {
   source: { fileName: string; metrics: TrackMetrics; sampleRate: number; channels: number; duration: number };
   /** The measured render the audio was made from. */
   render: { state: ChainState; safety: SafetyResult; targetResult: TargetResult | null };
+  signal?: AbortSignal;
 }
 
 export interface ExportFile { blob: Blob; filename: string }
@@ -111,8 +113,8 @@ export async function bundleReport(engine: EngineClient, audio: PreparedAudio, r
     peakGuard: audio.provenance.peakGuard,
     codecVerification: audio.codecVerification,
   });
-  const pdf = assemblePdf(await renderReportPages(report));
+  const pdf = assemblePdf(await renderReportPages(report, req.signal));
   cb.onStatus?.('Bundling...');
-  const bundle = await zip([{ name: audio.filename, data: audio.blob }, { name: REPORT_FILENAME, data: pdf }], date);
+  const bundle = await zip([{ name: audio.filename, data: audio.blob }, { name: REPORT_FILENAME, data: pdf }], date, req.signal);
   return { blob: bundle, filename: `${baseName(req.source.fileName)}_XYP3RN_${targetTag(req.targetLufs)}_report.zip` };
 }

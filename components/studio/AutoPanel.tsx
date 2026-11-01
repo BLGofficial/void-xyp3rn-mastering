@@ -12,9 +12,11 @@ const LABELS: Record<Intention, string> = {
 };
 
 /** Automatic proposal. It writes into the chain; every move stays editable. Suggests — never decides. */
-export function AutoPanel({ intention, onIntention, intensity, onIntensity, canRun, busy, onRun, onPreset, notes }: {
+export function AutoPanel({ intention, onIntention, intensity, onIntensity, canRun, busy, onRun, onPreset, canUndo, onUndo, notes }: {
   intention: Intention; onIntention: (v: Intention) => void; intensity: number | null; onIntensity: (v: number | null) => void;
-  canRun: boolean; busy: boolean; onRun: () => void; onPreset: (style: Style) => void; notes: string[] | null;
+  canRun: boolean; busy: boolean; onRun: () => void; onPreset: (style: Style) => void;
+  /** Restore the chain the last Auto/preset replaced. */
+  canUndo: boolean; onUndo: () => void; notes: string[] | null;
 }) {
   const effective = intensity ?? INTENTIONS[intention].intensity;
   return (
@@ -46,6 +48,9 @@ export function AutoPanel({ intention, onIntention, intensity, onIntensity, canR
         <p className="text-xs text-ash">Dense sources cap at 35%. Uses the target and ceiling below.</p>
         <button type="button" data-testid="auto-run" className="xr-button w-full" disabled={!canRun || busy} onClick={onRun}>
           {busy ? 'Working…' : 'Suggest a master'}
+        </button>
+        <button type="button" data-testid="auto-undo" className="xr-button w-full" disabled={!canUndo || busy} onClick={onUndo}>
+          Undo auto
         </button>
       </div>
       {notes && (

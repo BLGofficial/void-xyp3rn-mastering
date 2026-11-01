@@ -111,3 +111,19 @@ export const loadEngineOracle = () => load<OracleEngine>('void-engine.js');
 export const loadTargetOracle = () => load<OracleTarget>('void-target.js');
 export const loadAutoOracle = () => load<OracleAuto>('void-auto.js');
 export const loadAiOracle = () => load<OracleAI>('void-ai.js');
+
+type X = typeof import('../lib/export');
+export interface OracleExport {
+  validateMp3: X['validateMp3'];
+  /** Encodes through a Worker loaded by URL; verifies via OfflineAudioContext and globalThis.VoidEngine. */
+  encodeCheckedMp3(buffer: unknown, workerUrl: string, options?: Record<string, unknown>): Promise<{ bytes: Blob } & Record<string, unknown>>;
+}
+export interface OracleReport {
+  measurements: X['measurements'];
+  model: X['reportModel'];
+  /** Renders pages on a canvas (document required) and assembles a PDF. */
+  pdf(report: unknown, signal?: AbortSignal): Promise<Blob>;
+  zip(entries: { name: string; blob: Blob | Uint8Array }[], date: string, signal?: AbortSignal): Promise<Blob>;
+}
+export const loadExportOracle = () => load<OracleExport>('void-export.js');
+export const loadReportOracle = () => load<OracleReport>('void-report.js');

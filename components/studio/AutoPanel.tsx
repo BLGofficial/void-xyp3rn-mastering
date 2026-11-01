@@ -1,6 +1,6 @@
 'use client';
 
-import { INTENTIONS, type Intention } from '@/lib/auto';
+import { INTENTIONS, type Intention, type Style } from '@/lib/auto';
 import { Panel, Slider } from './ui';
 
 const LABELS: Record<Intention, string> = {
@@ -12,14 +12,27 @@ const LABELS: Record<Intention, string> = {
 };
 
 /** Automatic proposal. It writes into the chain; every move stays editable. Suggests — never decides. */
-export function AutoPanel({ intention, onIntention, intensity, onIntensity, canRun, busy, onRun, notes }: {
+export function AutoPanel({ intention, onIntention, intensity, onIntensity, canRun, busy, onRun, onPreset, notes }: {
   intention: Intention; onIntention: (v: Intention) => void; intensity: number | null; onIntensity: (v: number | null) => void;
-  canRun: boolean; busy: boolean; onRun: () => void; notes: string[] | null;
+  canRun: boolean; busy: boolean; onRun: () => void; onPreset: (style: Style) => void; notes: string[] | null;
 }) {
   const effective = intensity ?? INTENTIONS[intention].intensity;
   return (
-    <Panel title="Auto" aside={<span className="font-mono text-[11px] text-muted">Local · deterministic</span>}>
+    <Panel title="Auto" aside={<span className="font-mono text-xs text-muted">Local · deterministic</span>}>
       <div className="space-y-3">
+        <div>
+          <span className="xr-label">Mastering presets</span>
+          <div className="mt-1 grid grid-cols-3 gap-2">
+            {(['natural', 'warm', 'punchy'] as Style[]).map(style => (
+              <button
+                key={style} type="button" data-testid={`preset-${style}`} className="xr-button px-2 capitalize"
+                disabled={!canRun || busy} onClick={() => onPreset(style)}
+              >
+                {style}
+              </button>
+            ))}
+          </div>
+        </div>
         <label className="block">
           <span className="xr-label">Intention</span>
           <select
@@ -30,13 +43,13 @@ export function AutoPanel({ intention, onIntention, intensity, onIntensity, canR
           </select>
         </label>
         <Slider label="Intensity" value={effective} min={0} max={100} step={1} unit="%" onChange={onIntensity} />
-        <p className="text-xs text-muted">Dense sources cap at 35%. Uses the target and ceiling below.</p>
+        <p className="text-xs text-ash">Dense sources cap at 35%. Uses the target and ceiling below.</p>
         <button type="button" data-testid="auto-run" className="xr-button w-full" disabled={!canRun || busy} onClick={onRun}>
           {busy ? 'Working…' : 'Suggest a master'}
         </button>
       </div>
       {notes && (
-        <ol data-testid="auto-notes" className="mt-4 space-y-1.5 border-t border-line pt-3 text-xs text-ash">
+        <ol data-testid="auto-notes" className="xr-reveal mt-4 space-y-1.5 border-t border-line pt-3 text-xs text-ash">
           {notes.map((n, i) => (
             <li key={i} className="flex gap-2"><span aria-hidden className="font-mono text-gold">{String(i + 1).padStart(2, '0')}</span><span>{n}</span></li>
           ))}

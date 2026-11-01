@@ -14,10 +14,10 @@ const config: Config = {
       chrome: '#000000', // bars, nav
       gold: { DEFAULT: '#FACD68', dim: '#C9A03E', glow: '#2A1E00' },
       cloud: '#E8E8E8', // headings, key content
-      ash: '#888888', // body copy
-      muted: '#444444', // metadata
+      ash: '#A6A6A6', // body copy
+      muted: '#686868', // metadata
       white: '#FFFFFF', // high-contrast emphasis only
-      line: { DEFAULT: '#1A1A1A', card: '#222222' }, // borders
+      line: { DEFAULT: '#282828', card: '#343434' }, // borders
       code: { bg: '#0A0A0A', fg: '#D4D4D4' },
     },
     fontFamily: {

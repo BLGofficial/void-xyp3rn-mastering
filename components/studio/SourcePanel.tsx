@@ -25,9 +25,9 @@ export function SourcePanel({ fileName, fileSize, metadata, metrics, busy, onFil
     if (file) onFile(file);
   };
   return (
-    <Panel title="Source" aside={metadata && <span className="font-mono text-[11px] text-muted">{metadata.sampleRate / 1000} kHz · {metadata.bitsPerSample}-bit · {metadata.channels} ch</span>}>
+    <Panel title="Source" aside={metadata && <span className="font-mono text-xs text-muted">{metadata.sampleRate / 1000} kHz · {metadata.bitsPerSample}-bit · {metadata.channels} ch</span>}>
       <label
-        className={`flex cursor-pointer flex-col items-center justify-center gap-1 border border-dashed px-4 py-6 text-center transition-colors ${
+        className={`xr-dropzone flex cursor-pointer flex-col items-center justify-center gap-1 border border-dashed px-4 py-6 text-center ${
           over ? 'border-gold bg-gold-glow' : 'border-line-card bg-surface hover:border-gold-dim'
         } ${busy ? 'pointer-events-none opacity-60' : ''}`}
         onDragOver={e => { e.preventDefault(); setOver(true); }}
@@ -35,7 +35,7 @@ export function SourcePanel({ fileName, fileSize, metadata, metrics, busy, onFil
         onDrop={e => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files); }}
       >
         <span className="font-heading text-sm font-bold text-cloud">{fileName ?? 'Drop a WAV or browse'}</span>
-        <span className="font-mono text-[11px] text-muted">
+        <span className="font-mono text-xs text-ash">
           {fileSize ? bytes(fileSize) : '16/24/32-bit PCM or 32-bit float · up to 8 channels'}
         </span>
         <input
@@ -46,7 +46,7 @@ export function SourcePanel({ fileName, fileSize, metadata, metrics, busy, onFil
 
       {metrics && (
         <>
-          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+          <div className="xr-reveal mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
             <Readout label="Integrated" value={num(metrics.loudness.integratedLufs)} unit="LUFS" testId="source-lufs" emphasis />
             <Readout label="True peak" value={num(metrics.loudness.truePeakDbtp)} unit="dBTP" testId="source-tp" emphasis />
             <Readout label="Range" value={num(metrics.loudness.loudnessRangeLu)} unit="LU" />

@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Minimal static server for the exported app (e2e + local preview). Serves
 // only files under the root; no directory listing.
 import { createReadStream, existsSync, statSync } from 'node:fs';

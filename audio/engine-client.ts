@@ -1,4 +1,4 @@
-import type { Intention } from '../lib/auto';
+import type { Intention, Style } from '../lib/auto';
 import type { ChainState } from '../lib/dsp';
 import type { WavFormat } from '../lib/engine';
 import type { AudioData, TrackMetrics } from '../lib/engine';
@@ -23,7 +23,9 @@ export interface EngineClient {
   render(state: ChainState, cb?: EngineCallbacks): Promise<RenderResult>;
   /** Propose, render and safety-check an automatic master under the user's current output settings. */
   auto(intention: Intention, intensity: number | null, loudnessTarget: number | null, renderSettings: ChainState, cb?: EngineCallbacks): Promise<AutoResult>;
-  exportWav(format: WavFormat, dither: boolean, measure: boolean, cb?: EngineCallbacks): Promise<ExportResult>;
+  /** Apply one of the reference engine's source-aware mastering styles. */
+  preset(style: Style, intensity: number, loudnessTarget: number | null, renderSettings: ChainState, cb?: EngineCallbacks): Promise<AutoResult>;
+  exportWav(format: WavFormat, dither: boolean, cb?: EngineCallbacks): Promise<ExportResult>;
   /** Float copy of the last render, for the MP3 encoder. */
   master(cb?: EngineCallbacks): Promise<MasterResult>;
   /** Peak/loudness re-measurement in the worker, so verifying a decoded MP3 never blocks the UI. */
@@ -68,7 +70,9 @@ export function createEngineClient(): EngineClient {
     render: (state, cb) => call<RenderResult>({ type: 'render', state }, cb),
     auto: (intention, intensity, loudnessTarget, renderSettings, cb) =>
       call<AutoResult>({ type: 'auto', intention, intensity, loudnessTarget, renderSettings }, cb),
-    exportWav: (format, dither, measure, cb) => call<ExportResult>({ type: 'export', format, dither, measure }, cb),
+    preset: (style, intensity, loudnessTarget, renderSettings, cb) =>
+      call<AutoResult>({ type: 'preset', style, intensity, loudnessTarget, renderSettings }, cb),
+    exportWav: (format, dither, cb) => call<ExportResult>({ type: 'export', format, dither }, cb),
     master: cb => call<MasterResult>({ type: 'master' }, cb),
     measurer: {
       verifyPeak: (audio, ceilingDbtp) => call<PeakInspection>({ type: 'verify-peak', audio: plain(audio), ceilingDbtp }),

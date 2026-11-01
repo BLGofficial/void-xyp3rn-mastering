@@ -113,7 +113,11 @@ describe('XYP3RN MASTERING studio', () => {
     await page.getByTestId('format-select').selectOption('pcm24');
     await page.getByTestId('dither').check();
     await page.getByTestId('render').click();
+    await page.getByTestId('render-orb').waitFor();
     await page.getByTestId('report-status').filter({ hasText: /reached|limited/i }).waitFor({ timeout: 180_000 });
+    await page.getByTestId('rendered-file-name').waitFor({ timeout: 60_000 });
+    expect(await page.getByTestId('render-orb').count()).toBe(0);
+    expect(await page.getByTestId('rendered-audio').getAttribute('src')).toMatch(/^blob:/);
     expect(await page.getByTestId('report-status').textContent()).toMatch(/reached/i);
     expect(Math.abs((await numberIn('report-lufs')) + 14)).toBeLessThanOrEqual(0.2);
 
@@ -127,6 +131,15 @@ describe('XYP3RN MASTERING studio', () => {
     // Independent re-measure of the file as delivered (after 24-bit quantization + dither).
     expect(Math.abs(metrics.loudness.integratedLufs! + 14)).toBeLessThanOrEqual(0.25);
     expect(metrics.loudness.truePeakDbtp!).toBeLessThanOrEqual(-1 + 0.05);
+  });
+
+  it('renders the reference-backed mastering presets into playable files', async () => {
+    await page.getByTestId('preset-warm').click();
+    await page.getByTestId('render-orb').waitFor();
+    await page.getByText('Engine: warm preset ready').waitFor({ timeout: 180_000 });
+    await page.getByTestId('rendered-file-name').waitFor();
+    expect(await page.getByTestId('render-orb').count()).toBe(0);
+    expect(await page.getByTestId('auto-notes').locator('li').count()).toBeGreaterThanOrEqual(5);
   });
 
   it('suggests an automatic master, applies it to the chain and keeps the user in control', async () => {
@@ -155,8 +168,14 @@ describe('XYP3RN MASTERING studio', () => {
     await page.getByTestId('target-select').selectOption('-14');
     await page.getByTestId('render').click();
     await page.getByTestId('report-status').filter({ hasText: /reached|limited/i }).waitFor({ timeout: 180_000 });
+    await page.getByTestId('rendered-file-name').waitFor({ timeout: 60_000 });
+    // Changing format stales the WAV; re-encode the same render as MP3 without re-rendering.
     await page.getByTestId('format-select').selectOption('mp3');
     expect(await page.getByTestId('dither').isDisabled()).toBe(true);
+    expect(await page.getByTestId('rendered-file-name').count()).toBe(0);
+    await page.getByTestId('prepare-file').click();
+    await page.getByTestId('rendered-file-name').filter({ hasText: /_mp3-320\.mp3$/ }).waitFor({ timeout: 180_000 });
+    expect(await page.getByTestId('export').textContent()).toMatch(/Download MP3/);
     const [download] = await Promise.all([page.waitForEvent('download', { timeout: 180_000 }), page.getByTestId('export').click()]);
     expect(download.suggestedFilename()).toMatch(/_mp3-320\.mp3$/);
     const bytes = readFileSync((await download.path())!);
@@ -172,8 +191,9 @@ describe('XYP3RN MASTERING studio', () => {
 
   it('bundles the master and a PDF mastering report in one ZIP', async () => {
     await page.getByTestId('format-select').selectOption('pcm24');
-    await page.getByTestId('report-bundle').check();
-    const [download] = await Promise.all([page.waitForEvent('download', { timeout: 180_000 }), page.getByTestId('export').click()]);
+    await page.getByTestId('prepare-file').click();
+    await page.getByTestId('rendered-file-name').filter({ hasText: /_pcm24\.wav$/ }).waitFor({ timeout: 60_000 });
+    const [download] = await Promise.all([page.waitForEvent('download', { timeout: 180_000 }), page.getByTestId('report-bundle').click()]);
     expect(download.suggestedFilename()).toMatch(/_report\.zip$/);
     const files = unzip(readFileSync((await download.path())!));
     expect([...files.keys()]).toEqual([expect.stringMatching(/_pcm24\.wav$/), 'XYP3RN-Mastering-Report.pdf']);
@@ -186,7 +206,6 @@ describe('XYP3RN MASTERING studio', () => {
     const pages = Number(/\/Type \/Pages \/Count (\d+)/.exec(pdf)![1]);
     expect(pages).toBeGreaterThanOrEqual(2);
     expect(pdf.match(/\/Filter \/DCTDecode/g)).toHaveLength(pages);
-    await page.getByTestId('report-bundle').uncheck();
   });
 
   it('raised no page or console errors', () => {

@@ -20,11 +20,11 @@ function ModuleCard({ proc, onChange, onRemove }: { proc: ProcessorState; onChan
   const def = DEFINITIONS[proc.id];
   const set = (key: string, value: number) => onChange({ ...proc, parameters: { ...proc.parameters, [key]: value } });
   return (
-    <article className={`border bg-surface p-4 transition-colors ${proc.bypassed ? 'xr-off border-line' : 'border-gold-dim'}`} aria-label={def.name}>
+    <article className={`xr-module border p-4 ${proc.bypassed ? 'xr-off border-line' : 'border-gold-dim'}`} aria-label={def.name}>
       <header className="mb-3 flex items-center justify-between gap-2">
         <h3 className={`font-heading text-sm font-bold ${proc.bypassed ? 'text-ash' : 'text-cloud'}`}>{def.name}</h3>
         <div className="flex gap-1.5">
-          {onRemove && <button type="button" onClick={onRemove} className="px-1.5 font-mono text-[11px] uppercase text-muted hover:text-gold" aria-label={`Remove ${def.name}`}>✕</button>}
+          {onRemove && <button type="button" onClick={onRemove} className="min-h-11 min-w-11 px-1.5 font-mono text-xs uppercase text-muted hover:text-gold sm:min-h-0 sm:min-w-0" aria-label={`Remove ${def.name}`}>✕</button>}
           <Toggle pressed={!proc.bypassed} onClick={() => onChange({ ...proc, bypassed: !proc.bypassed })} label={`${def.name} on`}>
             {proc.bypassed ? 'Off' : 'On'}
           </Toggle>

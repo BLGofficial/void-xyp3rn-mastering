@@ -3,7 +3,7 @@
 // encoding never block the UI thread. The source and last render stay here so
 // export re-encodes exactly what was measured.
 
-import { intent, renderProposal, tonalProfile, type TonalProfile } from '../lib/auto';
+import { intent, renderProposal, suggest, tonalProfile, withLoudnessTarget, type TonalProfile } from '../lib/auto';
 import type { ChainState } from '../lib/dsp';
 import {
   analyzeTrack, assertIntegrity, createBuffer, decodeWav, encodeWav, evaluateSafety, preflightWav, renderToTarget, verifyPeak,
@@ -77,6 +77,19 @@ async function handle(id: number, request: EngineRequest) {
     return reply({ id, kind: 'done', result });
   }
 
+  if (request.type === 'preset') {
+    onStatus(`Preset: ${request.style}...`);
+    let proposal = suggest(source, sourceMetrics, request.style, request.intensity);
+    if (request.loudnessTarget !== null) proposal = withLoudnessTarget(proposal, request.loudnessTarget);
+    const out = await renderProposal(source, sourceMetrics, proposal, { renderSettings: request.renderSettings, onStatus, onProgress });
+    rendered = { buffer: out.buffer, metrics: out.metrics, state: out.state };
+    const result: AutoResult = {
+      state: out.state, metrics: out.metrics, safety: out.safety!, notes: out.notes,
+      targetResult: out.targetResult.requested === null ? null : (out.targetResult as RenderResult['targetResult']),
+    };
+    return reply({ id, kind: 'done', result });
+  }
+
   if (!rendered) throw Object.assign(new Error('Render before exporting.'), { code: 'NO_RENDER' });
   if (request.type === 'master') {
     const channels = rendered.buffer.channels.map(c => c.slice());
@@ -87,12 +100,7 @@ async function handle(id: number, request: EngineRequest) {
   const safety = assertIntegrity(evaluateSafety(sourceMetrics, rendered.metrics, rendered.state, { format: request.format, stats: rendered.buffer.processingStats }));
   onStatus('Encoding...');
   const bytes = await encodeWav(rendered.buffer, request.format, { dither: request.dither && request.format !== 'float32' });
-  let masterMetrics: TrackMetrics | null = null;
-  if (request.measure) {
-    onStatus('Measuring the exported file...');
-    masterMetrics = await analyzeTrack((await decodeWav(bytes.slice(0))).buffer);
-  }
-  const result: ExportResult = { bytes, safety, provenance: provenance(rendered.buffer), masterMetrics };
+  const result: ExportResult = { bytes, safety, provenance: provenance(rendered.buffer) };
   reply({ id, kind: 'done', result }, [bytes]);
 }
 

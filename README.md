@@ -41,3 +41,16 @@ npm run typecheck
 - Static export (`output: 'export'`): Next 14 is end-of-life and has unpatched server-side advisories; with no Next server at runtime those paths don't exist in production.
 - MP3 encoding uses [LAME](https://lame.sourceforge.io) via [lamejs](https://github.com/zhuker/lamejs) 1.2.1 (LGPL-3.0), shipped unmodified as a separate file at `/vendor/lamejs/lame.min.js` and loaded at runtime by the encoder worker; replace that file to relink.
 - Brand: mark is gold `#FACD68` on Studio Black `#080808` only, never below 24 px.
+
+## Design
+
+Tokens, components and copy rules live in [`docs/design-system.md`](docs/design-system.md);
+framework-free values in [`docs/design-tokens.css`](docs/design-tokens.css); a rendered
+reference in [`docs/styleguide.html`](docs/styleguide.html). All three are extracted from
+`tailwind.config.ts` and `app/globals.css` and cite the file each value comes from.
+
+The reference is a static file with no build step — open it directly, or serve the folder:
+
+```sh
+python3 -m http.server 8080 --directory docs
+```

@@ -1,7 +1,7 @@
 // Messages between the UI thread, the engine Web Worker and the AudioWorklet.
 // Plain data only: everything here must survive structured cloning.
 
-import type { Intention } from '../lib/auto';
+import type { Intention, Style } from '../lib/auto';
 import type { ChainState } from '../lib/dsp';
 import type { PeakGuard, ProcessingStats, SafetyResult, TargetResult, TrackMetrics, WavFormat, WavInfo } from '../lib/engine';
 import type { MeterReadings, PeakInspection } from '../lib/meter';
@@ -10,8 +10,8 @@ export type EngineRequest =
   | { type: 'load'; file: File }
   | { type: 'render'; state: ChainState }
   | { type: 'auto'; intention: Intention; intensity: number | null; loudnessTarget: number | null; renderSettings: ChainState }
-  /** `measure`: decode the encoded file and analyse it, for the report's master column. */
-  | { type: 'export'; format: WavFormat; dither: boolean; measure: boolean }
+  | { type: 'preset'; style: Style; intensity: number; loudnessTarget: number | null; renderSettings: ChainState }
+  | { type: 'export'; format: WavFormat; dither: boolean }
   /** The last render as float audio, for encoders that live outside the worker (MP3). */
   | { type: 'master' }
   | { type: 'verify-peak'; audio: PlainAudio; ceilingDbtp: number }
@@ -56,8 +56,6 @@ export interface ExportResult {
   /** Safety re-checked for the chosen PCM format (overs would clip). */
   safety: SafetyResult;
   provenance: MasterProvenance;
-  /** Measured from the decoded file as written; present when requested. */
-  masterMetrics: TrackMetrics | null;
 }
 
 export type EngineReply =

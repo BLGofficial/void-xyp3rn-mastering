@@ -1,12 +1,13 @@
 import { analyzeTrack, verifyPeak, type AudioData } from '../engine';
 import { check, fail } from '../engine/errors';
-import type { CheckedMp3, CheckedMp3Options, Mp3Codec } from './types';
+import type { CheckedMp3, CheckedMp3Options, Measurer, Mp3Codec } from './types';
 
 export const MP3_BITRATES = [320, 192] as const;
 const RATES = [32000, 44100, 48000];
 /** MP3 encoders pad and delay; a larger length difference means the decode is not this file. */
 const MAX_DECODED_LENGTH_DRIFT = 4096;
 const PASSES = 4;
+const IN_THREAD: Measurer = { verifyPeak, analyze: analyzeTrack };
 const TARGET_TOLERANCE_LU = 0.2;
 const MAX_CODEC_GAIN_DB = 3;
 
@@ -34,6 +35,7 @@ export async function encodeCheckedMp3(buffer: AudioData, codec: Mp3Codec, optio
   validateMp3(buffer, bitrate);
   const { signal } = options;
   const ceiling = options.ceilingDbtp ?? 0;
+  const measure = options.measure ?? IN_THREAD;
   let gainDb = 0, candidate = buffer;
   let best: { result: CheckedMp3; error: number } | null = null;
 
@@ -41,17 +43,17 @@ export async function encodeCheckedMp3(buffer: AudioData, codec: Mp3Codec, optio
     check(signal);
     const bytes = await codec.encode(candidate, bitrate, { signal, onProgress: options.onProgress });
     options.onStatus?.('Checking decoded MP3...');
-    const decoded = await codec.decode(bytes, { signal });
+    const decoded = await codec.decode(bytes, { signal, sampleRate: buffer.sampleRate });
     check(signal);
     if (decoded.sampleRate !== buffer.sampleRate || decoded.numberOfChannels !== buffer.numberOfChannels
       || Math.abs(decoded.length - buffer.length) > MAX_DECODED_LENGTH_DRIFT) {
       fail('EXPORT_VERIFICATION_FAILED', 'The decoded MP3 does not match the master\'s format. Export WAV instead.');
     }
-    const verification = await verifyPeak(decoded, ceiling, { signal });
+    const verification = await measure.verifyPeak(decoded, ceiling, { signal });
     const last = pass === PASSES - 1;
 
     if (verification.verified) {
-      const metrics = await analyzeTrack(decoded, { signal });
+      const metrics = await measure.analyze(decoded, { signal });
       const measured = metrics.loudness.integratedLufs;
       const error = Number.isFinite(options.targetLufs) && Number.isFinite(measured) ? options.targetLufs! - measured! : 0;
       const result: CheckedMp3 = {

@@ -10,7 +10,14 @@ export type Mp3Bitrate = 192 | 320;
  */
 export interface Mp3Codec {
   encode(buffer: AudioData, bitrate: Mp3Bitrate, options: { signal?: AbortSignal; onProgress?: (fraction: number) => void }): Promise<Uint8Array>;
-  decode(bytes: Uint8Array, options: { signal?: AbortSignal }): Promise<AudioData>;
+  /** `sampleRate` is the master's: platform decoders resample to their context rate. */
+  decode(bytes: Uint8Array, options: { signal?: AbortSignal; sampleRate: number }): Promise<AudioData>;
+}
+
+/** Peak and loudness re-measurement of decoded audio; defaults to lib/engine in-thread. */
+export interface Measurer {
+  verifyPeak(audio: AudioData, ceilingDbtp: number, options: { signal?: AbortSignal }): Promise<PeakInspection>;
+  analyze(audio: AudioData, options: { signal?: AbortSignal }): Promise<TrackMetrics>;
 }
 
 export interface CheckedMp3Options {
@@ -22,6 +29,8 @@ export interface CheckedMp3Options {
   signal?: AbortSignal;
   onStatus?: (message: string) => void;
   onProgress?: (fraction: number) => void;
+  /** Where to measure decoded passes (e.g. the engine worker from the UI thread). */
+  measure?: Measurer;
 }
 
 export interface CodecVerification extends PeakInspection {

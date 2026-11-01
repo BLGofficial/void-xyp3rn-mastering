@@ -5,6 +5,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { crc32 } from 'node:zlib';
 import { chromium, type Browser, type Page } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { analyzeTrack, createBuffer, decodeWav, encodeWav } from '../lib/engine';
@@ -14,6 +15,42 @@ import { program } from '../test/signals';
 const RATE = 44100;
 let server: Server, browser: Browser, page: Page, url: string, wavPath: string;
 const errors: string[] = [];
+
+/** Minimal stored-ZIP reader via the central directory; checks every CRC. */
+function unzip(bytes: Buffer) {
+  const end = bytes.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  const count = bytes.readUInt16LE(end + 10);
+  let at = bytes.readUInt32LE(end + 16);
+  const files = new Map<string, Buffer>();
+  for (let i = 0; i < count; i++) {
+    expect(bytes.readUInt32LE(at)).toBe(0x02014b50);
+    const crc = bytes.readUInt32LE(at + 16), size = bytes.readUInt32LE(at + 24), nameLength = bytes.readUInt16LE(at + 28);
+    const name = bytes.subarray(at + 46, at + 46 + nameLength).toString('utf8'), local = bytes.readUInt32LE(at + 42);
+    const data = bytes.subarray(local + 30 + bytes.readUInt16LE(local + 26), local + 30 + bytes.readUInt16LE(local + 26) + size);
+    expect(crc32(data) >>> 0, `${name} CRC`).toBe(crc);
+    files.set(name, data);
+    at += 46 + nameLength;
+  }
+  return files;
+}
+
+/** Decode an MP3 with the browser's own decoder at the given rate; planar float back to Node. */
+async function decodeInPage(bytes: Buffer, rate: number) {
+  const planes = await page.evaluate(async ([b64, sampleRate]) => {
+    const raw = Uint8Array.from(atob(b64 as string), c => c.charCodeAt(0));
+    const decoded = await new OfflineAudioContext(1, 1, sampleRate as number).decodeAudioData(raw.buffer);
+    return Array.from({ length: decoded.numberOfChannels }, (_, c) => {
+      const f = decoded.getChannelData(c), u = new Uint8Array(f.buffer, f.byteOffset, f.byteLength);
+      let s = '';
+      for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000));
+      return btoa(s);
+    });
+  }, [bytes.toString('base64'), rate] as const);
+  const channels = planes.map(p => { const b = Buffer.from(p, 'base64'); return new Float32Array(b.buffer, b.byteOffset, b.byteLength / 4); });
+  const buffer = createBuffer(rate, channels.length, channels[0]!.length);
+  channels.forEach((c, i) => buffer.channels[i]!.set(c));
+  return buffer;
+}
 
 const numberIn = async (testId: string) => {
   const text = (await page.getByTestId(testId).textContent()) ?? '';
@@ -112,6 +149,44 @@ describe('XYP3RN MASTERING studio', () => {
     // Touching any control makes the result stale rather than silently exporting old audio.
     await limiter.getByRole('button', { name: 'Brickwall Limiter on' }).click();
     expect(await page.getByTestId('report-status').count()).toBe(0);
+  });
+
+  it('exports a 320 kbps MP3 whose decoded audio holds the ceiling and the target', async () => {
+    await page.getByTestId('target-select').selectOption('-14');
+    await page.getByTestId('render').click();
+    await page.getByTestId('report-status').filter({ hasText: /reached|limited/i }).waitFor({ timeout: 180_000 });
+    await page.getByTestId('format-select').selectOption('mp3');
+    expect(await page.getByTestId('dither').isDisabled()).toBe(true);
+    const [download] = await Promise.all([page.waitForEvent('download', { timeout: 180_000 }), page.getByTestId('export').click()]);
+    expect(download.suggestedFilename()).toMatch(/_mp3-320\.mp3$/);
+    const bytes = readFileSync((await download.path())!);
+    // First frame: MPEG-1 Layer III sync, bitrate index 14 = 320 kbps.
+    const frame = bytes[0] === 0x49 ? bytes.indexOf(0xff, 10) : 0;
+    expect(bytes[frame]).toBe(0xff);
+    expect(bytes[frame + 1]! & 0xfe).toBe(0xfa);
+    expect(bytes[frame + 2]! >> 4).toBe(14);
+    const metrics = await analyzeTrack(await decodeInPage(bytes, RATE));
+    expect(Math.abs(metrics.loudness.integratedLufs! + 14)).toBeLessThanOrEqual(0.25);
+    expect(metrics.loudness.truePeakDbtp!).toBeLessThanOrEqual(-1 + 0.05);
+  });
+
+  it('bundles the master and a PDF mastering report in one ZIP', async () => {
+    await page.getByTestId('format-select').selectOption('pcm24');
+    await page.getByTestId('report-bundle').check();
+    const [download] = await Promise.all([page.waitForEvent('download', { timeout: 180_000 }), page.getByTestId('export').click()]);
+    expect(download.suggestedFilename()).toMatch(/_report\.zip$/);
+    const files = unzip(readFileSync((await download.path())!));
+    expect([...files.keys()]).toEqual([expect.stringMatching(/_pcm24\.wav$/), 'XYP3RN-Mastering-Report.pdf']);
+    const wav = files.get([...files.keys()][0]!)!;
+    const { buffer } = await decodeWav(new Uint8Array(wav).buffer);
+    expect(Math.abs((await analyzeTrack(buffer)).loudness.integratedLufs! + 14)).toBeLessThanOrEqual(0.25);
+    const pdf = files.get('XYP3RN-Mastering-Report.pdf')!.toString('latin1');
+    expect(pdf.startsWith('%PDF-1.4\n%XYP3RN report\n')).toBe(true);
+    expect(pdf.endsWith('%%EOF\n')).toBe(true);
+    const pages = Number(/\/Type \/Pages \/Count (\d+)/.exec(pdf)![1]);
+    expect(pages).toBeGreaterThanOrEqual(2);
+    expect(pdf.match(/\/Filter \/DCTDecode/g)).toHaveLength(pages);
+    await page.getByTestId('report-bundle').uncheck();
   });
 
   it('raised no page or console errors', () => {

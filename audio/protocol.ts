@@ -3,14 +3,34 @@
 
 import type { Intention } from '../lib/auto';
 import type { ChainState } from '../lib/dsp';
-import type { SafetyResult, TargetResult, TrackMetrics, WavFormat, WavInfo } from '../lib/engine';
-import type { MeterReadings } from '../lib/meter';
+import type { PeakGuard, ProcessingStats, SafetyResult, TargetResult, TrackMetrics, WavFormat, WavInfo } from '../lib/engine';
+import type { MeterReadings, PeakInspection } from '../lib/meter';
 
 export type EngineRequest =
   | { type: 'load'; file: File }
   | { type: 'render'; state: ChainState }
   | { type: 'auto'; intention: Intention; intensity: number | null; loudnessTarget: number | null; renderSettings: ChainState }
-  | { type: 'export'; format: WavFormat; dither: boolean };
+  /** `measure`: decode the encoded file and analyse it, for the report's master column. */
+  | { type: 'export'; format: WavFormat; dither: boolean; measure: boolean }
+  /** The last render as float audio, for encoders that live outside the worker (MP3). */
+  | { type: 'master' }
+  | { type: 'verify-peak'; audio: PlainAudio; ceilingDbtp: number }
+  | { type: 'analyze'; audio: PlainAudio };
+
+/** Audio that crosses the worker boundary. */
+export interface PlainAudio {
+  sampleRate: number;
+  channels: Float32Array[];
+}
+
+/** What the report needs about how the rendered master was made. */
+export interface MasterProvenance {
+  duration: number;
+  processingStats: ProcessingStats | null;
+  peakGuard: PeakGuard | null;
+}
+
+export interface MasterResult extends PlainAudio, MasterProvenance {}
 
 export interface LoadResult {
   metadata: WavInfo;
@@ -35,12 +55,15 @@ export interface ExportResult {
   bytes: ArrayBuffer;
   /** Safety re-checked for the chosen PCM format (overs would clip). */
   safety: SafetyResult;
+  provenance: MasterProvenance;
+  /** Measured from the decoded file as written; present when requested. */
+  masterMetrics: TrackMetrics | null;
 }
 
 export type EngineReply =
   | { id: number; kind: 'status'; message: string }
   | { id: number; kind: 'progress'; fraction: number }
-  | { id: number; kind: 'done'; result: LoadResult | RenderResult | AutoResult | ExportResult }
+  | { id: number; kind: 'done'; result: LoadResult | RenderResult | AutoResult | ExportResult | MasterResult | PeakInspection | TrackMetrics }
   | { id: number; kind: 'error'; code: string; message: string };
 
 /** UI -> worklet. */

@@ -6,10 +6,12 @@
 import { intent, renderProposal, tonalProfile, type TonalProfile } from '../lib/auto';
 import type { ChainState } from '../lib/dsp';
 import {
-  analyzeTrack, assertIntegrity, decodeWav, encodeWav, evaluateSafety, preflightWav, renderToTarget,
+  analyzeTrack, assertIntegrity, createBuffer, decodeWav, encodeWav, evaluateSafety, preflightWav, renderToTarget, verifyPeak,
   type AudioData, type TrackMetrics,
 } from '../lib/engine';
-import type { AutoResult, EngineReply, EngineRequest, ExportResult, LoadResult, RenderResult } from './protocol';
+import type {
+  AutoResult, EngineReply, EngineRequest, ExportResult, LoadResult, MasterProvenance, MasterResult, PlainAudio, RenderResult,
+} from './protocol';
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -18,6 +20,14 @@ let sourceMetrics: TrackMetrics | null = null;
 let rendered: { buffer: AudioData; metrics: TrackMetrics; state: ChainState } | null = null;
 /** Tonal profile of the current source; computed on first Auto run. */
 let spectrum: TonalProfile | null = null;
+
+function fromPlain({ sampleRate, channels }: PlainAudio): AudioData {
+  const buffer = createBuffer(sampleRate, channels.length, channels[0]?.length ?? 0);
+  channels.forEach((c, i) => buffer.channels[i]!.set(c));
+  return buffer;
+}
+
+const provenance = (b: AudioData): MasterProvenance => ({ duration: b.duration, processingStats: b.processingStats ?? null, peakGuard: b.peakGuard ?? null });
 
 const reply = (message: EngineReply, transfer: Transferable[] = []) => self.postMessage(message, transfer);
 
@@ -38,6 +48,10 @@ async function handle(id: number, request: EngineRequest) {
     const result: LoadResult = { metadata, sampleRate: buffer.sampleRate, channels, metrics };
     return reply({ id, kind: 'done', result }, channels.map(c => c.buffer));
   }
+
+  // Stateless measurements of audio the UI thread decoded (MP3 verification).
+  if (request.type === 'verify-peak') return reply({ id, kind: 'done', result: await verifyPeak(fromPlain(request.audio), request.ceilingDbtp) });
+  if (request.type === 'analyze') return reply({ id, kind: 'done', result: await analyzeTrack(fromPlain(request.audio)) });
 
   if (!source || !sourceMetrics) throw Object.assign(new Error('Load a WAV first.'), { code: 'NO_SOURCE' });
 
@@ -64,11 +78,21 @@ async function handle(id: number, request: EngineRequest) {
   }
 
   if (!rendered) throw Object.assign(new Error('Render before exporting.'), { code: 'NO_RENDER' });
+  if (request.type === 'master') {
+    const channels = rendered.buffer.channels.map(c => c.slice());
+    const result: MasterResult = { sampleRate: rendered.buffer.sampleRate, channels, ...provenance(rendered.buffer) };
+    return reply({ id, kind: 'done', result }, channels.map(c => c.buffer));
+  }
   // PCM formats add a clipping check the float render didn't need.
   const safety = assertIntegrity(evaluateSafety(sourceMetrics, rendered.metrics, rendered.state, { format: request.format, stats: rendered.buffer.processingStats }));
   onStatus('Encoding...');
   const bytes = await encodeWav(rendered.buffer, request.format, { dither: request.dither && request.format !== 'float32' });
-  const result: ExportResult = { bytes, safety };
+  let masterMetrics: TrackMetrics | null = null;
+  if (request.measure) {
+    onStatus('Measuring the exported file...');
+    masterMetrics = await analyzeTrack((await decodeWav(bytes.slice(0))).buffer);
+  }
+  const result: ExportResult = { bytes, safety, provenance: provenance(rendered.buffer), masterMetrics };
   reply({ id, kind: 'done', result }, [bytes]);
 }
 

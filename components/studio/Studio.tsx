@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createEngineClient, type EngineClient } from '@/audio/engine-client';
+import { exportMaster, type ExportFormat } from '@/audio/export-flow';
 import { createPlayer, type Player } from '@/audio/player';
 import type { LiveMeters, LoadResult, RenderResult } from '@/audio/protocol';
 import type { Intention } from '@/lib/auto';
 import { defaultState, type ChainState } from '@/lib/dsp';
-import type { WavFormat } from '@/lib/engine';
 import { AutoPanel } from './AutoPanel';
 import { ChainRack } from './ChainRack';
 import { Header } from './Header';
@@ -30,8 +30,8 @@ function renderState(chain: ChainState, target: string, ceiling: number): ChainS
 
 const settingsKey = (chain: ChainState, target: string, ceiling: number) => JSON.stringify(renderState(chain, target, ceiling));
 
-function download(bytes: ArrayBuffer, name: string) {
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+function download(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
   const a = Object.assign(document.createElement('a'), { href: url, download: name });
   document.body.append(a);
   a.click();
@@ -51,8 +51,9 @@ export function Studio() {
   const [chain, setChain] = useState<ChainState>(() => defaultState());
   const [target, setTarget] = useState('off');
   const [ceiling, setCeiling] = useState(-1);
-  const [format, setFormat] = useState<WavFormat>('pcm24');
+  const [format, setFormat] = useState<ExportFormat>('pcm24');
   const [dither, setDither] = useState(true);
+  const [withReport, setWithReport] = useState(false);
   const [stored, setStored] = useState<Stored | null>(null);
   const [intention, setIntention] = useState<Intention>('balanced');
   const [autoIntensity, setAutoIntensity] = useState<number | null>(null);
@@ -155,19 +156,23 @@ export function Studio() {
     }
   };
 
-  const exportWav = async () => {
-    if (!engine.current || !source) return;
+  const exportFile = async () => {
+    if (!engine.current || !source || !result) return;
     setBusy(true); setError(null);
     try {
-      const { bytes } = await engine.current.exportWav(format, dither, { onStatus: setStatus });
-      const base = source.fileName.replace(/\.[^.]+$/, '');
-      const tag = target === 'off' ? 'master' : `${target}LUFS`;
-      download(bytes, `${base}_XYP3RN_${tag}_${format}.wav`);
+      const file = await exportMaster(engine.current, {
+        format, dither, withReport,
+        source: { fileName: source.fileName, metrics: source.metrics, sampleRate: source.sampleRate, channels: source.metadata.channels, duration: source.metadata.length / source.sampleRate },
+        render: { state: result.state, safety: result.safety, targetResult: result.targetResult },
+        ceilingDbtp: ceiling,
+        targetLufs: target === 'off' ? null : Number(target),
+      }, { onStatus: setStatus, onProgress: setProgress });
+      download(file.blob, file.filename);
       setStatus('Engine: exported');
     } catch (e) {
       fail(e);
     } finally {
-      setBusy(false);
+      setBusy(false); setProgress(null);
     }
   };
 
@@ -213,13 +218,14 @@ export function Studio() {
           />
           <OutputPanel
             target={target} onTarget={setTarget} ceiling={ceiling} onCeiling={setCeiling} format={format} onFormat={setFormat}
-            dither={dither} onDither={setDither} canRender={!!source} busy={busy} progress={progress} onRender={render} result={result} onExport={exportWav}
+            dither={dither} onDither={setDither} withReport={withReport} onWithReport={setWithReport} canRender={!!source} busy={busy} progress={progress} onRender={render} result={result} onExport={exportFile}
           />
           <p className="mt-3 font-mono text-[10px] uppercase tracking-label text-muted">Suggests — never decides. You keep the final call.</p>
         </aside>
       </main>
       <footer className="border-t border-line bg-chrome px-4 py-2 font-mono text-[10px] uppercase tracking-label text-muted md:px-8">
-        XYP3RN Tech · Local processing · No audio leaves the machine
+        XYP3RN Tech · Local processing · No audio leaves the machine · MP3 encoding by{' '}
+        <a className="text-ash underline-offset-2 hover:underline" href="https://lame.sourceforge.io" target="_blank" rel="noreferrer">LAME</a> (LGPL)
       </footer>
     </div>
   );

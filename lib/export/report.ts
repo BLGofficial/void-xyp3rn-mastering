@@ -1,3 +1,4 @@
+import { DEFINITIONS, type ChainState, type ParamDef } from '../dsp';
 import type { MeasurementRow, Report, ReportInput } from './types';
 
 type Measured = ReportInput['source'];
@@ -83,4 +84,55 @@ export function reportModel(input: ReportInput): Report {
     notes,
     signOff: 'Generated locally by XYP3RN MASTERING. An automated measurement record, not a human approval or a digital signature.',
   };
+}
+
+export interface EffectLine { name: string; settings: string[] }
+export interface EffectsSummary {
+  /** Processors that touched the audio, in signal order. */
+  applied: EffectLine[];
+  /** Present in the chain but bypassed: did not process audio. */
+  bypassed: string[];
+  /** Loudness target, ceiling and oversampling applied after the effects. */
+  output: string[];
+}
+
+const minus = (text: string) => text.replace(/^-/, '\u2212');
+const trimmed = (v: number, digits: number) => minus(String(Number(v.toFixed(digits))));
+
+/** "Detector (0 peak, 1 hybrid ...)" -> base "Detector" plus per-value names; other parentheticals are hints. */
+function parseLabel(label: string): { base: string; options: Map<number, string> | null } {
+  const m = /^(.*?)\s*\((.*)\)$/.exec(label);
+  if (!m) return { base: label, options: null };
+  const pairs = m[2]!.split(/,\s*/).map(part => /^(\d+)\s+([^=].*)$/.exec(part));
+  if (pairs.length < 2 || pairs.some(x => !x)) return { base: m[1]!, options: null };
+  return { base: m[1]!, options: new Map(pairs.map(x => [Number(x![1]), x![2]!])) };
+}
+
+function setting(def: ParamDef, value: number): string {
+  const { base, options } = parseLabel(def.label);
+  if (options?.has(value)) return `${base}: ${options.get(value)}`;
+  const digits = def.step < 1 ? Math.min(3, String(def.step).split('.')[1]?.length ?? 0) : 0;
+  // Bipolar controls (gains) read as moves: +2.8 dB, −0.3 dB.
+  const sign = def.min < 0 && def.max > 0 && value > 0 ? '+' : '';
+  return `${base} ${sign}${trimmed(value, digits)}${def.unit ? ` ${def.unit}` : ''}`;
+}
+
+/** The chain as a reader would describe it: what was applied, with what settings, then the output stage. */
+export function effectsSummary(chain: ChainState): EffectsSummary {
+  const applied: EffectLine[] = [], bypassed: string[] = [];
+  for (const p of chain.processors) {
+    const def = DEFINITIONS[p.id];
+    if (p.bypassed) { bypassed.push(def.name); continue; }
+    applied.push({
+      name: def.name,
+      settings: Object.entries(def.parameters).map(([key, d]) => setting(d, p.parameters[key] ?? d.default)),
+    });
+  }
+  const t = chain.loudnessTarget;
+  const output = [
+    t ? `Loudness target ${trimmed(t.targetLufs, 1)} LUFS (output gain ${t.correctionDb > 0 ? '+' : ''}${trimmed(t.correctionDb, 2)} dB, applied once after the effects)` : 'No loudness target',
+    chain.outputCeilingDbtp === null || chain.outputCeilingDbtp === undefined ? 'No output ceiling' : `True-peak ceiling ${trimmed(chain.outputCeilingDbtp, 1)} dBTP`,
+    chain.quality === 'studio' ? 'Clip quality: 4x oversampled (studio)' : 'Clip quality: standard',
+  ];
+  return { applied, bypassed, output };
 }

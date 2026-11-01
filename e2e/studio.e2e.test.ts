@@ -134,8 +134,19 @@ describe('XYP3RN MASTERING studio', () => {
     expect(await page.getByTestId('report-status').textContent()).toMatch(/reached/i);
     expect(Math.abs((await numberIn('report-lufs')) + 14)).toBeLessThanOrEqual(0.2);
 
-    const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export').click()]);
-    expect(download.suggestedFilename()).toMatch(/\.wav$/);
+    // One click delivers the master and, right after it, a PDF of the effects that made it.
+    const downloads: import('playwright').Download[] = [];
+    const collect = (d: import('playwright').Download) => downloads.push(d);
+    page.on('download', collect);
+    await page.getByTestId('export').click();
+    await expect.poll(() => downloads.length, { timeout: 60_000 }).toBe(2);
+    page.off('download', collect);
+    const [download, pdfDownload] = downloads as [import('playwright').Download, import('playwright').Download];
+    expect(download.suggestedFilename()).toMatch(/_pcm24\.wav$/);
+    expect(pdfDownload.suggestedFilename()).toBe(download.suggestedFilename().replace(/\.wav$/, '_report.pdf'));
+    const pdf = readFileSync((await pdfDownload.path())!).toString('latin1');
+    expect(pdf.startsWith('%PDF-1.4\n%XYP3RN report\n')).toBe(true);
+    expect(Number(/\/Type \/Pages \/Count (\d+)/.exec(pdf)![1])).toBeGreaterThanOrEqual(1);
     const bytes = readFileSync((await download.path())!);
     const { buffer, metadata } = await decodeWav(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
     expect(metadata.bitsPerSample).toBe(24);
@@ -159,8 +170,8 @@ describe('XYP3RN MASTERING studio', () => {
     await page.getByTestId('target-select').selectOption('-14');
     await page.getByTestId('auto-intention').selectOption('balanced');
     await page.getByTestId('auto-run').click();
-    // The previous manual render may still be current; wait for the auto result itself.
-    await page.getByTestId('auto-notes').waitFor({ timeout: 180_000 });
+    // Notes from the preset test may still be showing; wait for the auto result itself.
+    await page.getByText('Engine: auto master ready').waitFor({ timeout: 180_000 });
     expect(await page.getByTestId('report-status').textContent()).toMatch(/reached/i);
     expect(Math.abs((await numberIn('report-lufs')) + 14)).toBeLessThanOrEqual(0.2);
     // The proposal is explained and lands in the editable chain: the limiter is now on.

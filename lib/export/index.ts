@@ -3,6 +3,6 @@
 
 export { encodeCheckedMp3, MP3_BITRATES, validateMp3 } from './mp3';
 export { assemblePdf, PAGE_HEIGHT_PX, PAGE_WIDTH_PX } from './pdf';
-export { measurements, reportModel } from './report';
+export { effectsSummary, measurements, reportModel, type EffectLine, type EffectsSummary } from './report';
 export type * from './types';
 export { zip } from './zip';

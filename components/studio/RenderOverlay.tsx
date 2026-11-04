@@ -31,6 +31,15 @@ function stageLabel(phase: OrbPhase | null, p: EnginePhase | null): string {
   return p.pass ? `MEASURE ${p.pass}/${p.passes}` : 'MEASURE';
 }
 
+/** What the engine is doing, in words, for the status line (the chain pass sends no status of its own). */
+function stageStep(p: EnginePhase | null): string | null {
+  if (!p) return null;
+  if (p.phase === 'analyse') return 'Profiling the source';
+  if (p.phase === 'render') return 'Rendering the chain';
+  if (p.phase === 'peak') return 'Checking true peak';
+  return p.pass ? `Loudness pass ${p.pass}/${p.passes}` : 'Measuring loudness';
+}
+
 /**
  * The render state: a compact glass sheet over the dimmed studio, with the orb
  * driven by what the engine is doing (stage, level, peaks, gain reduction).
@@ -170,16 +179,18 @@ export function RenderOverlay({ open, completed, status, progress, block, phase,
 
   if (!shown || typeof document === 'undefined') return null;
   const percent = locked ? 100 : progress === null ? null : Math.round(progress * 100);
-  const step = locked ? 'Master locked' : status.replace(/^Engine:\s*/, '') || 'Rendering…';
+  const step = locked ? 'Master locked' : stageStep(phase) ?? (status.replace(/^Engine:\s*/, '') || 'Rendering…');
 
   // Every readout is measured: source loudness, the requested target, and the live
   // level and gain reduction of the block being rendered. Nothing here is simulated.
-  const levelDb = block ? dbfs(block.rms) : null;
+  // Level and GR describe the chain pass; outside it the last block would be stale.
+  const live = orbPhase === 'render' ? block : null;
+  const levelDb = live ? dbfs(live.rms) : null;
   const metrics: [label: string, value: string, testId: string, accent?: boolean][] = [
     ['SOURCE', sourceLufs === null ? '—' : `${signed(sourceLufs)} LUFS`, 'orb-source'],
     ['TARGET', targetLufs === null ? 'OFF' : `${signed(targetLufs)} LUFS`, 'orb-target', true],
     ['LEVEL', levelDb === null ? '—' : `${signed(levelDb)} dB`, 'orb-level'],
-    ['GR', block ? `${signed(-block.reductionDb)} dB` : '—', 'orb-gr', true],
+    ['GR', live ? `${signed(-live.reductionDb)} dB` : '—', 'orb-gr', true],
   ];
 
   return createPortal(
@@ -217,7 +228,7 @@ export function RenderOverlay({ open, completed, status, progress, block, phase,
               <source src="/media/render-orb.mp4" type="video/mp4" />
             </video>
           )}
-          <div ref={stage} data-testid="orb-stage" aria-hidden className="absolute inset-0 cursor-grab active:cursor-grabbing" />
+          <div ref={stage} data-testid="orb-stage" aria-hidden className="xr-orb-mask absolute inset-0 cursor-grab active:cursor-grabbing" />
         </div>
 
         <dl className="grid grid-cols-2 gap-2 font-mono min-[400px]:grid-cols-4">

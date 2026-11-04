@@ -15,6 +15,15 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
 
+/**
+ * Point size scale for a canvas height. The shader's sizes were tuned on a ~860 px tall
+ * full-screen canvas; additive points keep the same coverage (and brightness) only if
+ * their size follows the canvas, otherwise a small orb saturates to a white blob.
+ */
+const pointScale = (height: number) => Math.max(0.3, Math.min(1.2, height / 860));
+/** Bloom glows a fixed pixel radius, so a small orb needs less of it to keep its particle detail. */
+const bloomStrength = (height: number) => 0.45 + 0.25 * Math.max(0, Math.min(1, (height - 260) / 500));
+
 const VERTEX = /* glsl */ `
   uniform float uTime;
   uniform float uRadius;
@@ -22,6 +31,7 @@ const VERTEX = /* glsl */ `
   uniform float uTransient;
   uniform float uLockPulse;
   uniform float uPixelRatio;
+  uniform float uScale;     // canvas height / reference height: keeps point coverage constant at any size
   uniform float uReduction; // 0..1: compressor + limiter gain reduction
   uniform float uPeak;      // 0..1: block peak approaching full scale
   uniform float uMeasure;   // 0..1: loudness measurement stage
@@ -117,12 +127,12 @@ const VERTEX = /* glsl */ `
     float innerWindow = smoothstep(-0.28, 0.22, shellMask + abs(sphereDir.x) * 0.35);
     float visibility = max(innerWindow, rimGlow * (0.82 + uProgress * 0.18));
 
-    vRidge = clamp(rimGlow * 1.1 + abs(n2) * 0.65 + abs(scanWave) * 0.6 + uReduction * 0.4 + uPeak * 0.6 + uGuard * rimGlow * 0.5, 0.0, 1.8);
+    vRidge = clamp(rimGlow * 1.1 + abs(n2) * 0.65 + abs(scanWave) * 0.6 + uReduction * 0.2 + uPeak * 0.45 + uGuard * rimGlow * 0.3, 0.0, 1.7);
     vAlpha = visibility * (0.22 + vRidge * 0.78);
     vUnitPos = sphereDir;
     vAiScan = rawChaos * 0.85 + abs(scanWave) * 0.6 + sweepBand * 0.8 + uPeak * 0.4;
 
-    gl_PointSize = (2.4 + vRidge * 1.8 + rawChaos * 1.6) * uPixelRatio * (1.0 / -mvPosition.z);
+    gl_PointSize = (2.4 + vRidge * 1.8 + rawChaos * 1.6) * uPixelRatio * uScale * (1.0 / -mvPosition.z);
   }
 `;
 
@@ -216,7 +226,7 @@ export class XYP3RNMasteringOrb {
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(width, height), 0.7, 0.45, 0.16);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(width, height), bloomStrength(height), 0.45, 0.16);
     this.composer.addPass(this.bloom);
 
     // 180x135 (~24k points, a third fewer than before) keeps mobile GPUs at 60 fps.
@@ -233,6 +243,7 @@ export class XYP3RNMasteringOrb {
         uTransient: { value: 0 },
         uLockPulse: { value: 0 },
         uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+        uScale: { value: pointScale(height) },
         uReduction: { value: 0 },
         uPeak: { value: 0 },
         uMeasure: { value: 0 },
@@ -356,5 +367,7 @@ export class XYP3RNMasteringOrb {
     this.renderer.setSize(width, height);
     this.composer.setSize(width, height);
     this.material.uniforms.uPixelRatio!.value = Math.min(window.devicePixelRatio, 2);
+    this.material.uniforms.uScale!.value = pointScale(height);
+    this.bloom.strength = bloomStrength(height);
   }
 }

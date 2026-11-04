@@ -67,6 +67,8 @@ export interface ExportResult {
 export type EngineReply =
   | { id: number; kind: 'status'; message: string }
   | { id: number; kind: 'progress'; fraction: number }
+  /** RMS of recently rendered audio, throttled; drives the render overlay. */
+  | { id: number; kind: 'level'; rms: number }
   | { id: number; kind: 'done'; result: LoadResult | RenderResult | AutoResult | ExportResult | MasterResult | PeakInspection | TrackMetrics }
   | { id: number; kind: 'error'; code: string; message: string };
 

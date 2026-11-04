@@ -126,12 +126,8 @@ describe('XYP3RN MASTERING studio', () => {
     await page.getByTestId('format-select').selectOption('pcm24');
     await page.getByTestId('dither').check();
     await page.getByTestId('render').click();
+    // Overlay structure is checked in the cancel test, where the render's end is under the test's control.
     await page.getByTestId('render-orb').waitFor();
-    // The render takes over the whole viewport, with Cancel focused as its way out.
-    const viewport = page.viewportSize()!;
-    expect(await page.getByTestId('render-orb').boundingBox()).toMatchObject({ x: 0, y: 0, width: viewport.width, height: viewport.height });
-    expect(await page.getByTestId('render-orb').getAttribute('role')).toBe('dialog');
-    await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('cancel');
     await page.getByTestId('report-status').filter({ hasText: /reached|limited/i }).waitFor({ timeout: 180_000 });
     await page.getByTestId('rendered-file-name').waitFor({ timeout: 60_000 });
     expect(await page.getByTestId('render-orb').count()).toBe(0);
@@ -255,15 +251,31 @@ describe('XYP3RN MASTERING studio', () => {
   it('cancels a running render and keeps the studio usable', async () => {
     await page.getByRole('button', { name: '4x Studio' }).click();
     await page.getByTestId('target-select').selectOption('-14');
-    // Esc is the overlay's escape route...
+    // Esc is the overlay's escape route... (reduced motion: a still frame, no WebGL)
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.getByTestId('render').click();
     await page.getByTestId('render-orb').waitFor();
+    // The render takes over the whole viewport, as a dialog, with Cancel focused as its way out.
+    const viewport = page.viewportSize()!;
+    expect(await page.getByTestId('render-orb').boundingBox()).toMatchObject({ x: 0, y: 0, width: viewport.width, height: viewport.height });
+    expect(await page.getByTestId('render-orb').getAttribute('role')).toBe('dialog');
+    await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('cancel');
+    await expect.poll(() => page.getByTestId('render-orb').getAttribute('data-orb')).toBe('still');
+    // Telemetry is measured, not simulated: the source's loudness as the Source panel shows it, and the target.
+    expect(await page.getByTestId('orb-target').textContent()).toBe('−14.0 LUFS');
+    const sourceLufs = (await page.getByTestId('source-lufs').textContent())!.match(/[−-]?\d+\.\d/)![0];
+    expect(await page.getByTestId('orb-source').textContent()).toContain(sourceLufs);
+    expect(await page.getByTestId('orb-stage').locator('canvas').count()).toBe(0);
     await page.keyboard.press('Escape');
     await page.getByText('Engine: cancelled').waitFor({ timeout: 30_000 });
     expect(await page.getByTestId('render-orb').count()).toBe(0);
-    // ...and so is its Cancel button.
+    // ...and so is its Cancel button. With motion on, the orb is fed live render levels; on this
+    // software-GL runner the performance guard swaps in the video so the page stays responsive.
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.getByTestId('render').click();
     await page.getByTestId('render-orb').waitFor();
+    await expect.poll(() => page.getByTestId('render-orb').getAttribute('data-orb'), { timeout: 15_000 }).toMatch(/^(webgl|video)$/);
+    await expect.poll(async () => Number(await page.getByTestId('orb-stage').getAttribute('data-energy')), { timeout: 15_000 }).toBeGreaterThan(0);
     await page.getByTestId('cancel').click();
     // The status already read 'cancelled' from the Esc round: wait for the overlay itself to close.
     await page.getByTestId('render-orb').waitFor({ state: 'detached', timeout: 30_000 });
@@ -272,6 +284,30 @@ describe('XYP3RN MASTERING studio', () => {
     expect(await page.getByTestId('cancel').count()).toBe(0);
     expect(await page.getByTestId('render').isEnabled()).toBe(true);
     await page.getByRole('button', { name: 'Standard' }).click();
+  });
+
+  it('runs the WebGL mastering orb when forced, and releases it when the render ends', async () => {
+    // Own small page: software WebGL is slow, and ?orb=webgl bypasses the fallback guards.
+    const orbPage = await browser.newPage({ viewport: { width: 480, height: 360 } });
+    const orbErrors: string[] = [];
+    orbPage.on('pageerror', e => orbErrors.push(e.message));
+    orbPage.on('console', m => { if (m.type() === 'error') orbErrors.push(m.text()); });
+    await orbPage.goto(`${url}?orb=webgl`);
+    await orbPage.getByTestId('file-input').setInputFiles(wavPath);
+    await orbPage.getByTestId('source-lufs').filter({ hasText: /\d/ }).waitFor({ timeout: 60_000 });
+    await orbPage.getByRole('button', { name: '4x Studio' }).click();
+    await orbPage.getByTestId('target-select').selectOption('-14');
+    const canvasesBefore = await orbPage.locator('canvas').count(); // e.g. the waveform
+    await orbPage.getByTestId('render').click();
+    await expect.poll(() => orbPage.getByTestId('render-orb').getAttribute('data-orb'), { timeout: 30_000 }).toBe('webgl');
+    expect(await orbPage.getByTestId('orb-stage').locator('canvas').count()).toBe(1);
+    await expect.poll(async () => Number(await orbPage.getByTestId('orb-stage').getAttribute('data-energy')), { timeout: 30_000 }).toBeGreaterThan(0);
+    await orbPage.keyboard.press('Escape');
+    await orbPage.getByTestId('render-orb').waitFor({ state: 'detached', timeout: 30_000 });
+    // The orb's canvas (and its WebGL context) is gone with the overlay.
+    expect(await orbPage.locator('canvas').count()).toBe(canvasesBefore);
+    expect(orbErrors).toEqual([]);
+    await orbPage.close();
   });
 
   it('imports FLAC losslessly: same readings as the WAV of the same PCM', async () => {

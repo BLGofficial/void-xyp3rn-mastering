@@ -10,6 +10,8 @@ import type { AutoResult, EngineInbound, EngineReply, EngineRequest, ExportResul
 export interface EngineCallbacks {
   onStatus?: (message: string) => void;
   onProgress?: (fraction: number) => void;
+  /** RMS of the audio being rendered right now (renders, Auto, presets). */
+  onLevel?: (rms: number) => void;
 }
 
 /** Error from the engine worker, carrying its machine-readable code. */
@@ -51,6 +53,7 @@ export function createEngineClient(): EngineClient {
     if (!p) return;
     if (data.kind === 'status') p.cb?.onStatus?.(data.message);
     else if (data.kind === 'progress') p.cb?.onProgress?.(data.fraction);
+    else if (data.kind === 'level') p.cb?.onLevel?.(data.rms);
     else {
       pending.delete(data.id);
       if (data.kind === 'done') p.resolve(data.result as never);

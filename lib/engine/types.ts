@@ -14,6 +14,8 @@ export interface AudioData extends AudioBufferLike {
 export interface EngineOptions extends ProgressOptions {
   onProgress?: (fraction: number) => void;
   onStatus?: (message: string) => void;
+  /** RMS of each rendered block (all channels), for live visuals. Observes only; output is unchanged. */
+  onLevel?: (rms: number) => void;
   /** Called once per render with gain-reduction statistics. */
   onRenderStats?: (stats: ProcessingStats) => void;
   /** Working-memory budget in bytes; defaults from device memory (0.5-4 GiB). */

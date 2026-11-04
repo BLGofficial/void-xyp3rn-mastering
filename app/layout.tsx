@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Bebas_Neue, DM_Sans, JetBrains_Mono, Syne } from 'next/font/google';
+import { BootHandoff } from '@/components/boot/BootHandoff';
+import { BOOT_SCRIPT, BootSplash } from '@/components/boot/BootSplash';
 import { RegisterServiceWorker } from '@/components/pwa/RegisterServiceWorker';
 import './globals.css';
 
@@ -23,9 +25,15 @@ export const viewport: Viewport = { themeColor: '#080808', colorScheme: 'dark', 
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${bebas.variable} ${syne.variable} ${dmSans.variable} ${jetbrains.variable}`}>
+    // The boot script tags <html> before hydration (repeat visit); React must not flag that.
+    <html lang="en" suppressHydrationWarning className={`${bebas.variable} ${syne.variable} ${dmSans.variable} ${jetbrains.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: BOOT_SCRIPT }} />
+      </head>
       <body className="bg-studio font-body text-ash antialiased">
+        <BootSplash />
         {children}
+        <BootHandoff />
         <RegisterServiceWorker />
       </body>
     </html>

@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import type { TrackMetrics } from '@/lib/engine';
+import type { EnginePhase, TrackMetrics } from '@/lib/engine';
 import type { SourceInfo } from '@/lib/import';
 import { bytes, num, time } from './format';
 import { Hint, useHint } from './hints';
+import { LoadProgress, SourceSkeleton } from './LoadProgress';
 import { Panel, Readout } from './ui';
 
 const FLAG_TEXT: Record<string, string> = {
@@ -26,8 +27,12 @@ export function formatLabel(m: SourceInfo): string {
 }
 
 /** File intake (drop or browse) plus the source's measured profile. */
-export function SourcePanel({ fileName, fileSize, metadata, metrics, busy, onFile }: {
+export function SourcePanel({ fileName, fileSize, metadata, metrics, busy, onFile, loading, progress }: {
   fileName?: string; fileSize?: number; metadata?: SourceInfo; metrics?: TrackMetrics; busy: boolean; onFile: (file: File) => void;
+  /** A file is being imported: its name and the engine stage. */
+  loading: { fileName: string; phase: EnginePhase | null } | null;
+  /** Stage progress (decode), 0..1. */
+  progress: number | null;
 }) {
   const [over, setOver] = useState(false);
   const hFile = useHint('file');
@@ -36,19 +41,25 @@ export function SourcePanel({ fileName, fileSize, metadata, metrics, busy, onFil
     if (file) onFile(file);
   };
   return (
-    <Panel title="Source" aside={metadata && <span className="font-mono text-xs text-muted"><span data-testid="source-format">{metadata.sampleRate / 1000} kHz · {formatLabel(metadata)} · {metadata.channels} ch</span></span>}>
+    <Panel title="Source" aside={metadata && !loading && <span className="font-mono text-xs text-muted"><span data-testid="source-format">{metadata.sampleRate / 1000} kHz · {formatLabel(metadata)} · {metadata.channels} ch</span></span>}>
       <label
         className={`xr-dropzone flex cursor-pointer flex-col items-center justify-center gap-1 border border-dashed px-4 py-6 text-center ${
           over ? 'border-gold bg-gold-glow' : 'border-line-card bg-surface hover:border-gold-dim'
-        } ${busy ? 'pointer-events-none opacity-60' : ''}`}
+        } ${loading ? 'pointer-events-none' : busy ? 'pointer-events-none opacity-60' : ''}`}
         onDragOver={e => { e.preventDefault(); setOver(true); }}
         onDragLeave={() => setOver(false)}
         onDrop={e => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files); }}
       >
-        <span className="font-heading text-sm font-bold text-cloud">{fileName ?? 'Drop a WAV, FLAC or MP3, or browse'}</span>
-        <span className="font-mono text-xs text-ash">
-          {fileSize ? bytes(fileSize) : 'WAV 16/24/32-bit or float · FLAC · MP3 · up to 8 channels'}
-        </span>
+        {loading ? (
+          <LoadProgress fileName={loading.fileName} phase={loading.phase} progress={progress} />
+        ) : (
+          <>
+            <span className="font-heading text-sm font-bold text-cloud">{fileName ?? 'Drop a WAV, FLAC or MP3, or browse'}</span>
+            <span className="font-mono text-xs text-ash">
+              {fileSize ? bytes(fileSize) : 'WAV 16/24/32-bit or float · FLAC · MP3 · up to 8 channels'}
+            </span>
+          </>
+        )}
         <input
           data-testid="file-input" type="file" accept={ACCEPT} className="sr-only" aria-describedby={hFile.id} disabled={busy}
           onChange={e => { pick(e.currentTarget.files); e.currentTarget.value = ''; }}
@@ -56,7 +67,8 @@ export function SourcePanel({ fileName, fileSize, metadata, metrics, busy, onFil
       </label>
       <Hint hint={hFile} />
 
-      {metrics && (
+      {loading && <SourceSkeleton />}
+      {metrics && !loading && (
         <>
           <div className="xr-reveal mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
             <Readout label="Integrated" value={num(metrics.loudness.integratedLufs)} unit="LUFS" testId="source-lufs" emphasis />

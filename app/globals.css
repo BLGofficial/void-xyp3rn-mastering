@@ -331,3 +331,211 @@ body::after {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Boot splash. Paints with the HTML; lifts on BootHandoff (data-boot="ready"),
+   or by itself at the cap. Transform/opacity only, plus one small SVG stroke.
+   --------------------------------------------------------------------------- */
+#xr-splash {
+  --splash-cap: 1.2s;
+  --splash-draw: 0.7s;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  background: #080808;
+  /* Lifts by itself at the cap even if JavaScript never runs. */
+  animation: xr-splash-out 420ms var(--xr-ease) var(--splash-cap) forwards;
+}
+html[data-boot-repeat='1'] #xr-splash {
+  --splash-cap: 0.7s;
+  --splash-draw: 0.35s;
+}
+html[data-boot='ready'] #xr-splash {
+  pointer-events: none;
+  animation: xr-splash-out 420ms var(--xr-ease) forwards;
+}
+.xr-splash-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(28rem 22rem at 50% 46%, rgb(250 205 104 / 14%), transparent 70%);
+  animation: xr-splash-glow 1.6s ease-in-out infinite alternate;
+}
+.xr-splash-stage {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+}
+.xr-splash-mark {
+  width: clamp(88px, 22vw, 128px);
+  height: auto;
+  overflow: visible;
+  animation: xr-splash-rise var(--splash-draw) var(--xr-ease) both;
+}
+.xr-splash-stroke {
+  fill: none;
+  stroke: #facd68;
+  stroke-width: 1.4px;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: xr-splash-draw var(--splash-draw) var(--xr-ease-soft) forwards;
+}
+.xr-splash-fill {
+  fill: #facd68;
+  opacity: 0;
+  animation: xr-splash-fade 320ms ease-out calc(var(--splash-draw) * 0.65) forwards;
+}
+.xr-splash-sweep {
+  mix-blend-mode: screen;
+}
+.xr-splash-word {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0;
+  font-family: var(--font-bebas), Impact, sans-serif;
+  letter-spacing: 0.18em;
+  line-height: 1;
+}
+.xr-splash-xyp {
+  color: #facd68;
+  font-size: 30px;
+}
+.xr-splash-mastering {
+  color: #e8e8e8;
+  font-size: 20px;
+}
+.xr-splash-xyp,
+.xr-splash-mastering {
+  opacity: 0;
+  animation: xr-splash-track 460ms var(--xr-ease) calc(var(--splash-draw) * 0.55) forwards;
+}
+.xr-splash-mastering {
+  animation-delay: calc(var(--splash-draw) * 0.7);
+}
+.xr-splash-line {
+  position: relative;
+  width: 132px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgb(250 205 104 / 14%);
+}
+.xr-splash-line > span {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, #facd68, #e8e8e8, transparent);
+  transform: translateX(-100%);
+  animation: xr-splash-scan 0.9s ease-in-out infinite;
+}
+/* On handoff: the line completes and the mark settles before the studio shows. */
+html[data-boot='ready'] .xr-splash-line > span {
+  animation: xr-splash-complete 300ms ease-out forwards;
+}
+html[data-boot='ready'] .xr-splash-fill {
+  animation: xr-splash-fade 160ms ease-out forwards;
+}
+/* The studio's own entrance waits for the splash, so it plays where it can be seen. */
+html:not([data-boot='ready']) .xr-studio-intro > * {
+  animation-play-state: paused;
+}
+
+@keyframes xr-splash-draw { to { stroke-dashoffset: 0; } }
+@keyframes xr-splash-fade { to { opacity: 1; } }
+@keyframes xr-splash-rise {
+  from { opacity: 0; transform: translateY(8px) scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes xr-splash-track {
+  from { opacity: 0; transform: translateY(6px) scaleX(1.18); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes xr-splash-scan {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+@keyframes xr-splash-complete {
+  from { transform: translateX(-30%); }
+  to { transform: translateX(0); }
+}
+@keyframes xr-splash-glow {
+  from { opacity: 0.65; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1.04); }
+}
+@keyframes xr-splash-out {
+  0% { opacity: 1; transform: none; visibility: visible; }
+  99% { visibility: visible; }
+  100% { opacity: 0; transform: scale(1.04); visibility: hidden; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #xr-splash { display: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   File import: bars follow the engine (decode fills them, analysis scans them),
+   readout placeholders shimmer. Transform/opacity only.
+   --------------------------------------------------------------------------- */
+.xr-load-bars {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 44px;
+}
+.xr-load-bars > span {
+  width: 4px;
+  height: 100%;
+  border-radius: 2px;
+  background: #343434;
+  transform: scaleY(calc(var(--h) * 0.5));
+  transition: transform 260ms var(--xr-ease), background-color 260ms ease;
+  animation: xr-load-idle 1.1s ease-in-out calc(var(--i) * -45ms) infinite alternate;
+}
+.xr-load-bars > span[data-lit] {
+  background: #facd68;
+  transform: scaleY(var(--h));
+}
+/* Analysis: a bright pass travels across the lit bars. */
+.xr-load-scan > span {
+  animation: xr-load-sweep 1s ease-in-out calc(var(--i) * 28ms) infinite;
+}
+.xr-load-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+}
+.xr-load-dot-active {
+  box-shadow: 0 0 0 0 rgb(250 205 104 / 60%);
+  animation: xr-load-ping 1.2s ease-out infinite;
+}
+.xr-skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 5%);
+}
+.xr-skeleton::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background: linear-gradient(90deg, transparent, rgb(250 205 104 / 10%), transparent);
+  transform: translateX(-100%);
+  animation: xr-skeleton 1.3s ease-in-out infinite;
+}
+@keyframes xr-load-idle {
+  from { opacity: 0.55; }
+  to { opacity: 1; }
+}
+@keyframes xr-load-sweep {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; filter: drop-shadow(0 0 6px rgb(250 205 104 / 55%)); }
+}
+@keyframes xr-load-ping {
+  from { box-shadow: 0 0 0 0 rgb(250 205 104 / 55%); }
+  to { box-shadow: 0 0 0 7px rgb(250 205 104 / 0%); }
+}
+@keyframes xr-skeleton {
+  to { transform: translateX(100%); }
+}

@@ -25,7 +25,8 @@ const flash = (peak: number) => (peak > 0 ? Math.max(0, Math.min(1, (20 * Math.l
 function stageLabel(phase: OrbPhase | null, p: EnginePhase | null): string {
   if (phase === 'locked') return 'LOCKED';
   if (!p) return 'STARTING';
-  if (p.phase === 'analyse') return 'ANALYSE';
+  // Import stages never reach a render; they read as analysis if they ever do.
+  if (p.phase === 'analyse' || p.phase === 'read' || p.phase === 'decode') return 'ANALYSE';
   if (p.phase === 'render') return 'RENDER';
   if (p.phase === 'peak') return 'PEAK CHECK';
   return p.pass ? `MEASURE ${p.pass}/${p.passes}` : 'MEASURE';
@@ -34,7 +35,7 @@ function stageLabel(phase: OrbPhase | null, p: EnginePhase | null): string {
 /** What the engine is doing, in words, for the status line (the chain pass sends no status of its own). */
 function stageStep(p: EnginePhase | null): string | null {
   if (!p) return null;
-  if (p.phase === 'analyse') return 'Profiling the source';
+  if (p.phase === 'analyse' || p.phase === 'read' || p.phase === 'decode') return 'Profiling the source';
   if (p.phase === 'render') return 'Rendering the chain';
   if (p.phase === 'peak') return 'Checking true peak';
   return p.pass ? `Loudness pass ${p.pass}/${p.passes}` : 'Measuring loudness';
@@ -71,7 +72,8 @@ export function RenderOverlay({ open, completed, status, progress, block, phase,
   const onCancelRef = useRef(onCancel);
   onCancelRef.current = onCancel;
 
-  const orbPhase: OrbPhase | null = locked ? 'locked' : phase?.phase ?? null;
+  const orbPhase: OrbPhase | null = locked ? 'locked'
+    : phase?.phase === 'read' || phase?.phase === 'decode' ? 'analyse' : phase?.phase ?? null;
 
   // Success: keep the sheet up just long enough for the lock pulse; cancel/error close at once.
   // Decided during render, on the open -> closed edge itself, so no commit ever has the sheet

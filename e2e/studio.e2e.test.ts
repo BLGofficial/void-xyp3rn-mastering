@@ -110,6 +110,35 @@ afterAll(async () => {
 });
 
 describe('XYP3RN MASTERING studio', () => {
+  it('opens on the brand splash from first paint, then hands off to an interactive studio', async () => {
+    // In the static HTML itself, so it shows before any JavaScript has run.
+    const html = await (await fetch(url)).text();
+    expect(html).toContain('data-testid="boot-splash"');
+
+    const boot = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    const start = Date.now();
+    await boot.goto(url);
+    const splash = boot.getByTestId('boot-splash');
+    // Lifted once the studio is interactive (JS handoff, not only the CSS cap), within the cap plus the exit.
+    await expect.poll(() => boot.evaluate(() => document.documentElement.dataset.boot), { timeout: 10_000 }).toBe('ready');
+    await expect.poll(() => splash.evaluate(el => getComputedStyle(el).visibility), { timeout: 5_000 }).toBe('hidden');
+    expect(Date.now() - start).toBeLessThan(6_000);
+    // Never in the way afterwards: the studio takes clicks.
+    await boot.getByTestId('guide-open').click();
+    await boot.getByRole('dialog', { name: 'Control guide' }).waitFor();
+    await boot.keyboard.press('Escape');
+    // Repeat visits get the short version.
+    await boot.reload();
+    expect(await boot.evaluate(() => document.documentElement.dataset.bootRepeat)).toBe('1');
+    await boot.close();
+
+    // Reduced motion: no splash at all.
+    const still = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
+    await still.goto(url, { waitUntil: 'domcontentloaded' });
+    expect(await still.getByTestId('boot-splash').evaluate(el => getComputedStyle(el).display)).toBe('none');
+    await still.close();
+  });
+
   it('shows the brand chrome and gold mark', async () => {
     await expect(page.title()).resolves.toMatch(/XYP3RN MASTERING/);
     const mark = page.getByRole('img', { name: 'XYP3RN' }).first();
@@ -118,8 +147,33 @@ describe('XYP3RN MASTERING studio', () => {
   });
 
   it('imports a WAV and analyses it locally', async () => {
+    // Record the loading view as it happens: the engine's real stages and the readout placeholders.
+    await page.evaluate(() => {
+      const log: string[] = [];
+      (window as unknown as { __load: string[] }).__load = log;
+      const push = (v: string | null | undefined) => { if (v && log[log.length - 1] !== v) log.push(v); };
+      const scan = (n: Node) => {
+        if (!(n instanceof HTMLElement)) return;
+        push(n.dataset.loadStage ?? n.querySelector<HTMLElement>('[data-load-stage]')?.dataset.loadStage);
+        if (n.matches('[data-testid="source-skeleton"]') || n.querySelector('[data-testid="source-skeleton"]')) push('skeleton');
+      };
+      new MutationObserver(records => records.forEach(r => {
+        if (r.type === 'attributes') push((r.target as HTMLElement).dataset.loadStage);
+        r.addedNodes.forEach(scan);
+      })).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-load-stage'] });
+    });
     await page.getByTestId('file-input').setInputFiles(wavPath);
     await page.getByTestId('source-lufs').filter({ hasText: /\d/ }).waitFor({ timeout: 60_000 });
+    // Stages arrive in engine order (fast ones may batch into the next render), with placeholders meanwhile;
+    // the loading view is gone once the readouts are in.
+    const load = await page.evaluate(() => (window as unknown as { __load: string[] }).__load);
+    expect(load).toContain('skeleton');
+    const stages = load.filter(s => s !== 'skeleton');
+    expect(stages).toContain('decode');
+    expect(stages).toContain('analyse');
+    const order = ['read', 'decode', 'analyse'];
+    expect(stages.map(s => order.indexOf(s))).toEqual([...stages.map(s => order.indexOf(s))].sort());
+    expect(await page.getByTestId('load-progress').count()).toBe(0);
     const lufs = await numberIn('source-lufs');
     expect(lufs).toBeGreaterThan(-30);
     expect(lufs).toBeLessThan(-10);

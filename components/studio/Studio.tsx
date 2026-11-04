@@ -81,6 +81,8 @@ export function Studio() {
   const [block, setBlock] = useState<BlockTelemetry | null>(null);
   const [phase, setPhase] = useState<EnginePhase | null>(null);
   const [completed, setCompleted] = useState(false);
+  // File import in progress: which file and the engine stage it is in.
+  const [loading, setLoading] = useState<{ fileName: string; phase: EnginePhase | null } | null>(null);
   const [autoUndo, setAutoUndo] = useState<{ chain: ChainState; ceiling: number } | null>(null);
   const [hints, setHints] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -147,8 +149,11 @@ export function Studio() {
     if (!engine.current) return;
     setBusy(true); setError(null); setStored(null); setRenderedFile(null); setMeters(null); setAutoUndo(null);
     player.current?.dispose(); player.current = null; setPlaying(false); setPosition(0);
+    setLoading({ fileName: file.name, phase: null });
     try {
-      const loaded = await engine.current.load(file, { onStatus: setStatus, onProgress: setProgress });
+      const loaded = await engine.current.load(file, {
+        onStatus: setStatus, onProgress: setProgress, onPhase: phase => setLoading(l => l && { ...l, phase }),
+      });
       setSource({ ...loaded, fileName: file.name, fileSize: file.size });
       player.current = await createPlayer(loaded.channels, loaded.sampleRate, chain, {
         meters: setMeters,
@@ -161,7 +166,7 @@ export function Studio() {
     } catch (e) {
       fail(e);
     } finally {
-      setBusy(false); setProgress(null);
+      setBusy(false); setProgress(null); setLoading(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- player picks up chain/AB changes via their own effects
   }, []);
@@ -309,7 +314,7 @@ export function Studio() {
             {error && (
               <div role="alert" data-testid="engine-error" className="border border-gold-dim bg-gold-glow px-4 py-3 text-sm text-cloud">{error}</div>
             )}
-            <div className="order-1 min-w-0 lg:order-none"><SourcePanel fileName={source?.fileName} fileSize={source?.fileSize} metadata={source?.metadata} metrics={source?.metrics} busy={busy} onFile={onFile} /></div>
+            <div className="order-1 min-w-0 lg:order-none"><SourcePanel fileName={source?.fileName} fileSize={source?.fileSize} metadata={source?.metadata} metrics={source?.metrics} busy={busy} onFile={onFile} loading={loading} progress={progress} /></div>
             {source && (
               <Panel title="Monitor" className="order-2 min-w-0 lg:order-none">
                 <div className="space-y-4">

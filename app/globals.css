@@ -260,6 +260,16 @@ body::before {
   to { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
 
+/* Control guide drawer: slides in from the right edge. */
+.xr-drawer[open] {
+  animation: xr-drawer-in var(--xr-smooth) var(--xr-ease) both;
+}
+
+@keyframes xr-drawer-in {
+  from { opacity: 0; transform: translateX(32px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 @keyframes xr-overlay-in {
   from { opacity: 0; }
   to { opacity: 1; }

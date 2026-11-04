@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { TrackMetrics } from '@/lib/engine';
+import { Hint, useHint } from './hints';
 
 type Wave = TrackMetrics['waveform'];
 
@@ -10,6 +11,7 @@ export function Waveform({ source, master, position, duration, onSeek }: {
   source: Wave; master?: Wave; position: number; duration: number; onSeek: (seconds: number) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const hSeek = useHint('seek');
 
   useEffect(() => {
     const el = canvas.current;
@@ -51,15 +53,18 @@ export function Waveform({ source, master, position, duration, onSeek }: {
   };
 
   return (
-    <canvas
-      ref={canvas} role="slider" tabIndex={0} aria-label="Playback position" aria-valuemin={0} aria-valuemax={Math.round(duration)} aria-valuenow={Math.round(position)}
-      className="block h-28 w-full cursor-pointer border border-line focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold"
-      onPointerDown={seekFromPointer}
-      onKeyDown={e => {
-        if (e.key === 'ArrowRight') onSeek(position + 5);
-        else if (e.key === 'ArrowLeft') onSeek(position - 5);
-        else if (e.key === 'Home') onSeek(0);
-      }}
-    />
+    <div>
+      <canvas
+        ref={canvas} role="slider" tabIndex={0} aria-label="Playback position" aria-valuemin={0} aria-valuemax={Math.round(duration)} aria-valuenow={Math.round(position)} aria-describedby={hSeek.id}
+        className="block h-28 w-full cursor-pointer border border-line focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold"
+        onPointerDown={seekFromPointer}
+        onKeyDown={e => {
+          if (e.key === 'ArrowRight') onSeek(position + 5);
+          else if (e.key === 'ArrowLeft') onSeek(position - 5);
+          else if (e.key === 'Home') onSeek(0);
+        }}
+      />
+      <Hint hint={hSeek} />
+    </div>
   );
 }

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { TrackMetrics } from '@/lib/engine';
 import type { SourceInfo } from '@/lib/import';
 import { bytes, num, time } from './format';
+import { Hint, useHint } from './hints';
 import { Panel, Readout } from './ui';
 
 const FLAG_TEXT: Record<string, string> = {
@@ -29,6 +30,7 @@ export function SourcePanel({ fileName, fileSize, metadata, metrics, busy, onFil
   fileName?: string; fileSize?: number; metadata?: SourceInfo; metrics?: TrackMetrics; busy: boolean; onFile: (file: File) => void;
 }) {
   const [over, setOver] = useState(false);
+  const hFile = useHint('file');
   const pick = (files: FileList | null) => {
     const file = files?.[0];
     if (file) onFile(file);
@@ -48,10 +50,11 @@ export function SourcePanel({ fileName, fileSize, metadata, metrics, busy, onFil
           {fileSize ? bytes(fileSize) : 'WAV 16/24/32-bit or float · FLAC · MP3 · up to 8 channels'}
         </span>
         <input
-          data-testid="file-input" type="file" accept={ACCEPT} className="sr-only" disabled={busy}
+          data-testid="file-input" type="file" accept={ACCEPT} className="sr-only" aria-describedby={hFile.id} disabled={busy}
           onChange={e => { pick(e.currentTarget.files); e.currentTarget.value = ''; }}
         />
       </label>
+      <Hint hint={hFile} />
 
       {metrics && (
         <>

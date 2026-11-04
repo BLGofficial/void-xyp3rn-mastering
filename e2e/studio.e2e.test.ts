@@ -505,6 +505,69 @@ describe('XYP3RN MASTERING studio', () => {
     await phone.close();
   });
 
+  it('installs as a PWA: manifest, brand icons, and a theme for the browser chrome', async () => {
+    const res = await fetch(new URL('manifest.webmanifest', url));
+    expect(res.status).toBe(200);
+    const manifest = await res.json() as { name: string; short_name: string; start_url: string; scope: string; display: string; theme_color: string; background_color: string; icons: { src: string; sizes: string; type: string; purpose?: string }[] };
+    expect(manifest).toMatchObject({ name: 'XYP3RN MASTERING', short_name: 'XYP3RN', start_url: '/', scope: '/', display: 'standalone', theme_color: '#080808', background_color: '#080808' });
+    // Real PNGs at their declared sizes, including the maskable shape Android crops to.
+    for (const want of ['192x192', '512x512']) expect(manifest.icons.some(i => i.sizes === want && (i.purpose ?? 'any').includes('any'))).toBe(true);
+    expect(manifest.icons.some(i => i.purpose === 'maskable')).toBe(true);
+    for (const icon of manifest.icons) {
+      const png = Buffer.from(await (await fetch(new URL(icon.src, url))).arrayBuffer());
+      expect(png.subarray(1, 4).toString('latin1'), icon.src).toBe('PNG');
+      expect(`${png.readUInt32BE(16)}x${png.readUInt32BE(20)}`, icon.src).toBe(icon.sizes);
+    }
+    expect(await page.locator('link[rel="manifest"]').getAttribute('href')).toMatch(/manifest\.webmanifest/);
+    expect(await page.locator('link[rel="apple-touch-icon"]').count()).toBeGreaterThan(0);
+    expect(await page.locator('meta[name="theme-color"]').getAttribute('content')).toBe('#080808');
+    expect(await page.locator('meta[name="viewport"]').getAttribute('content')).toMatch(/viewport-fit=cover/);
+  });
+
+  it('works offline once installed: reloads and masters a file with the server gone', async () => {
+    // Own origin and server, so the service worker and its cache are isolated, and so going
+    // offline can be made real by shutting the server down (not only emulated).
+    const offlineServer = (await serve('out')) as Server;
+    const origin = `http://127.0.0.1:${(offlineServer.address() as { port: number }).port}/`;
+    const context = await browser.newContext();
+    const app = await context.newPage();
+    const appErrors: string[] = [];
+    app.on('pageerror', e => appErrors.push(e.message));
+    await app.goto(origin);
+    // Installed and in control of the page (it claims clients on activation).
+    expect(await app.evaluate(() => Promise.race([navigator.serviceWorker.ready.then(() => true), new Promise(done => setTimeout(() => done(false), 20_000))]))).toBe(true);
+    await expect.poll(() => app.evaluate(() => !!navigator.serviceWorker.controller), { timeout: 20_000 }).toBe(true);
+    await expect.poll(() => app.evaluate(async () => (await caches.keys()).length), { timeout: 20_000 }).toBeGreaterThan(0);
+
+    offlineServer.closeAllConnections();
+    await new Promise(done => offlineServer.close(done));
+    await context.setOffline(true);
+
+    await app.reload();
+    await app.getByTestId('file-input').waitFor({ state: 'attached', timeout: 20_000 });
+    expect(await app.title()).toMatch(/XYP3RN MASTERING/);
+    // Says so, and that nothing needs the network.
+    expect(await app.getByTestId('offline').textContent()).toMatch(/offline/i);
+    await app.getByTestId('file-input').setInputFiles(wavPath);
+    await app.getByTestId('source-lufs').filter({ hasText: /\d/ }).waitFor({ timeout: 60_000 });
+    await app.getByTestId('target-select').selectOption('-14');
+    await app.getByTestId('render').click();
+    await app.getByTestId('rendered-file-name').waitFor({ timeout: 180_000 });
+    expect(await app.getByTestId('report-status').textContent()).toMatch(/reached|limited/i);
+
+    // The cache holds the app only: no audio, nothing from another origin.
+    const cached = await app.evaluate(async () => {
+      const urls: string[] = [];
+      for (const name of await caches.keys()) for (const req of await (await caches.open(name)).keys()) urls.push(req.url);
+      return urls;
+    });
+    expect(cached.length).toBeGreaterThan(10);
+    expect(cached.every(u => u.startsWith(origin))).toBe(true);
+    expect(cached.filter(u => /\.(wav|flac|mp3|aiff?)$/i.test(u) || u.startsWith('blob:'))).toEqual([]);
+    expect(appErrors).toEqual([]);
+    await context.close();
+  });
+
   it('raised no page or console errors', () => {
     expect(errors).toEqual([]);
   });

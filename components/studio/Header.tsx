@@ -1,4 +1,20 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import { XyperMark } from '../brand/XyperMark';
+
+/** navigator.onLine, live. Starts online so the static HTML matches the first client render. */
+function useOnline() {
+  const [online, setOnline] = useState(true);
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    update();
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update); };
+  }, []);
+  return online;
+}
 
 /** Chrome bar + mark/wordmark lockup (gold on black only, brand rule 01), with the guide controls. */
 export function Header({ status, hints, onHints, onGuide }: {
@@ -8,13 +24,15 @@ export function Header({ status, hints, onHints, onGuide }: {
   /** Open the control guide drawer. */
   onGuide: () => void;
 }) {
+  const online = useOnline();
   return (
     <header className="relative z-20">
-      <div className="xr-glass flex items-center justify-between gap-4 border-b border-gold px-4 py-2 font-mono text-xs uppercase tracking-label text-muted md:px-8">
+      <div className="xr-glass flex items-center justify-between gap-4 border-b border-gold px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] font-mono text-xs uppercase tracking-label text-muted md:px-8">
         <span>XYP3RN TECH · MASTERING</span>
         <span className="flex items-center gap-2 text-gold" role="status" aria-live="polite">
           <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-gold" />
           {status}
+          {!online && <span data-testid="offline" className="text-ash">· Offline, all local</span>}
         </span>
         <span className="hidden md:inline">Where Music Shapes Technology</span>
       </div>

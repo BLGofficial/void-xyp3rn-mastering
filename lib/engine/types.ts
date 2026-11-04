@@ -23,6 +23,10 @@ export interface BlockTelemetry {
 
 /** The stage the engine is in, reported as it starts. */
 export type EnginePhase =
+  /** Import: checking the file. */
+  | { phase: 'read' }
+  /** Import: decoding to PCM. */
+  | { phase: 'decode' }
   | { phase: 'analyse' }
   | { phase: 'render' }
   /** Loudness measurement; `pass`/`passes` when it is a loudness-target correction pass. */

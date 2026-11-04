@@ -33,8 +33,9 @@ const provenance = (b: AudioData): MasterProvenance => ({ duration: b.duration, 
 const reply = (message: EngineReply, transfer: Transferable[] = []) => self.postMessage(message, transfer);
 
 /** Make decoded audio the current source: analyse it, reset renders, hand the UI a playback copy. */
-async function adopt(id: number, buffer: AudioData, metadata: SourceInfo, onStatus: (m: string) => void) {
+async function adopt(id: number, buffer: AudioData, metadata: SourceInfo, onStatus: (m: string) => void, onPhase: (p: EnginePhase) => void) {
   onStatus('Analysing source...');
+  onPhase({ phase: 'analyse' });
   const metrics = await analyzeTrack(buffer);
   source = buffer; sourceMetrics = metrics; rendered = null; spectrum = null;
   // The UI needs its own copy for playback; the worker keeps the original for rendering.
@@ -62,15 +63,17 @@ async function handle(id: number, request: EngineRequest, signal: AbortSignal) {
 
   if (request.type === 'load') {
     onStatus('Checking file...');
+    onPhase({ phase: 'read' });
     await preflightWav(request.file);
     onStatus('Decoding...');
+    onPhase({ phase: 'decode' });
     const { buffer, metadata } = await decodeWav(await request.file.arrayBuffer(), { onProgress });
     return adopt(id, buffer, {
       container: 'wav', sampleRate: metadata.sampleRate, channels: metadata.channels, length: metadata.length, bitsPerSample: metadata.bitsPerSample,
       float: metadata.audioFormat === 3, lossy: false, bitrateKbps: null, channelMask: metadata.channelMask,
-    }, onStatus);
+    }, onStatus, onPhase);
   }
-  if (request.type === 'load-pcm') return adopt(id, fromPlain(request.audio), request.info, onStatus);
+  if (request.type === 'load-pcm') return adopt(id, fromPlain(request.audio), request.info, onStatus, onPhase);
 
   // Stateless measurements of audio the UI thread decoded (MP3 verification).
   if (request.type === 'verify-peak') return reply({ id, kind: 'done', result: await verifyPeak(fromPlain(request.audio), request.ceilingDbtp) });

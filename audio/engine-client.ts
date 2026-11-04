@@ -77,8 +77,10 @@ export function createEngineClient(): EngineClient {
 
   return {
     load: async (file, cb) => {
+      cb?.onPhase?.({ phase: 'read' });
       if ((await sniffFile(file)) === 'wav') return call<LoadResult>({ type: 'load', file }, cb);
       cb?.onStatus?.('Decoding...');
+      cb?.onPhase?.({ phase: 'decode' });
       const { audio, info } = await decodeCompressed(file);
       return call<LoadResult>({ type: 'load-pcm', audio, info }, cb);
     },

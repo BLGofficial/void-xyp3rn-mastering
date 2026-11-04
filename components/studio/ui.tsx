@@ -65,7 +65,7 @@ export function Toggle({ pressed, onClick, children, testId, label, disabled, de
   return (
     <button
       type="button" aria-pressed={pressed} aria-label={label} aria-describedby={describedBy} data-testid={testId} disabled={disabled} onClick={onClick}
-      className={`min-h-11 border px-2.5 py-1 font-mono text-xs uppercase tracking-label transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-0 ${
+      className={`min-h-11 min-w-11 border px-2.5 py-1 font-mono text-xs uppercase tracking-label transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-0 ${
         pressed ? 'border-gold bg-gold text-studio' : 'border-line-card bg-surface text-ash hover:border-gold-dim hover:text-gold'
       }`}
     >

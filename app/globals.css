@@ -41,6 +41,19 @@ body::before {
   mask-image: linear-gradient(to bottom, black, transparent 70%);
 }
 
+/* Ambient gold light behind the glass: frosted panels need something to diffuse. Static, so it costs nothing per frame. */
+body::after {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  content: '';
+  background:
+    radial-gradient(38rem 26rem at 12% 6%, rgb(250 205 104 / 10%), transparent 70%),
+    radial-gradient(32rem 28rem at 92% 42%, rgb(201 160 62 / 8%), transparent 70%),
+    radial-gradient(28rem 22rem at 35% 100%, rgb(250 205 104 / 6%), transparent 70%);
+}
+
 ::selection {
   background: #facd68;
   color: #080808;
@@ -128,13 +141,15 @@ body::before {
   .xr-label {
     @apply font-mono text-xs uppercase tracking-label text-ash;
   }
+  /* Glass panel: translucent tinted fill, frosted backdrop, a gold hairline catching the light at the top edge. */
   .xr-panel {
-    @apply border border-line-card;
     position: relative;
     overflow: hidden;
     isolation: isolate;
-    background: var(--xr-glass);
-    box-shadow: 0 18px 48px rgb(0 0 0 / 28%), inset 0 1px 0 rgb(255 255 255 / 4%);
+    border: 1px solid rgb(255 255 255 / 8%);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgb(24 21 15 / 56%), rgb(11 11 11 / 50%));
+    box-shadow: 0 18px 48px rgb(0 0 0 / 34%), inset 0 1px 0 rgb(255 255 255 / 6%);
     transition: transform var(--xr-smooth) var(--xr-ease), border-color var(--xr-fast) ease, box-shadow var(--xr-smooth) ease;
   }
   .xr-panel::before {
@@ -143,12 +158,20 @@ body::before {
     z-index: -1;
     pointer-events: none;
     content: '';
-    background: linear-gradient(135deg, rgb(255 255 255 / 4%), transparent 32%, rgb(250 205 104 / 2%));
+    background: linear-gradient(135deg, rgb(255 255 255 / 5%), transparent 34%, rgb(250 205 104 / 3%));
+  }
+  .xr-panel::after {
+    position: absolute;
+    inset: 0 12% auto;
+    height: 1px;
+    pointer-events: none;
+    content: '';
+    background: linear-gradient(90deg, transparent, rgb(250 205 104 / 38%), transparent);
   }
   @supports (backdrop-filter: blur(1px)) {
     .xr-panel,
     .xr-glass {
-      backdrop-filter: blur(18px) saturate(115%);
+      backdrop-filter: blur(20px) saturate(140%);
     }
   }
   @media (hover: hover) and (pointer: fine) {
@@ -189,7 +212,8 @@ body::before {
     transform: translateY(0) scale(0.985);
   }
   .xr-select {
-    @apply min-h-11 w-full border border-line-card px-3 py-2 font-mono text-xs text-cloud focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-gold sm:min-h-0;
+    /* 16 px below lg: iOS zooms the page when a smaller field takes focus. */
+    @apply min-h-11 w-full border border-line-card px-3 py-2 font-mono text-base text-cloud lg:text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-gold sm:min-h-0;
     background-color: rgb(17 17 17 / 82%);
     transition: border-color var(--xr-fast) ease, background-color var(--xr-fast) ease, box-shadow var(--xr-fast) ease;
   }
@@ -206,7 +230,8 @@ body::before {
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
   }
   .xr-dropzone {
-    background: rgb(17 17 17 / 62%);
+    border-radius: 10px;
+    background: rgb(12 12 12 / 50%);
     transition: transform var(--xr-smooth) var(--xr-ease), border-color var(--xr-fast) ease, background-color var(--xr-fast) ease, box-shadow var(--xr-fast) ease;
   }
   .xr-dropzone:hover {
@@ -214,7 +239,8 @@ body::before {
     box-shadow: inset 0 0 0 1px rgb(250 205 104 / 8%);
   }
   .xr-module {
-    background: rgb(17 17 17 / 64%);
+    border-radius: 10px;
+    background: rgb(10 10 10 / 46%);
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
     transition: transform var(--xr-smooth) var(--xr-ease), opacity var(--xr-fast) ease, border-color var(--xr-fast) ease, background-color var(--xr-fast) ease, box-shadow var(--xr-smooth) ease;
   }

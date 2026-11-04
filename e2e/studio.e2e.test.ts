@@ -440,6 +440,71 @@ describe('XYP3RN MASTERING studio', () => {
     expect(await page.getByTestId('file-input').isEnabled()).toBe(true);
   });
 
+  it('is mobile-first on a 390 px phone: fits, 44 px targets, frosted panels, Play and Render one tap away', async () => {
+    // Desktop keeps its own layout: no phone action bar.
+    expect(await page.getByTestId('mobile-actions').isVisible()).toBe(false);
+
+    const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const phoneErrors: string[] = [];
+    phone.on('pageerror', e => phoneErrors.push(e.message));
+    phone.on('console', m => { if (m.type() === 'error') phoneErrors.push(m.text()); });
+    await phone.goto(url);
+    await phone.getByTestId('file-input').setInputFiles(wavPath);
+    await phone.getByTestId('source-lufs').filter({ hasText: /\d/ }).waitFor({ timeout: 60_000 });
+
+    // Nothing scrolls sideways.
+    expect(await phone.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+    // Work order on a phone: load, listen, suggest, output; the detailed chain last.
+    const tops = await Promise.all(['Source', 'Monitor', 'Auto', 'Output', 'Chain'].map(async name => (await phone.getByRole('region', { name, exact: true }).boundingBox())!.y));
+    expect(tops).toEqual([...tops].sort((x, y) => x - y));
+
+    // Chain modules start collapsed on a phone; the header discloses their controls.
+    const eq = phone.getByRole('article', { name: 'Tone EQ' });
+    const disclose = eq.getByRole('button', { name: 'Tone EQ controls' });
+    expect(await disclose.getAttribute('aria-expanded')).toBe('false');
+    expect(await eq.getByRole('slider', { name: 'Low shelf', exact: true }).isVisible()).toBe(false);
+    await disclose.click();
+    expect(await disclose.getAttribute('aria-expanded')).toBe('true');
+    expect(await eq.getByRole('slider', { name: 'Low shelf', exact: true }).isVisible()).toBe(true);
+
+    // Every visible control is at least 44 x 44 px (a checkbox counts by its label).
+    const small = await phone.evaluate(() => [...document.querySelectorAll<HTMLElement>('button, a[href], select, input[type=range], input[type=checkbox], [role=slider]')]
+      .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && !el.closest('[hidden]') && getComputedStyle(el).visibility !== 'hidden'; })
+      .map(el => {
+        const target = el.matches('input[type=checkbox]') ? el.closest('label') ?? el : el;
+        const r = target.getBoundingClientRect();
+        return { control: el.getAttribute('aria-label') ?? el.textContent?.trim().slice(0, 30) ?? el.tagName, width: Math.round(r.width), height: Math.round(r.height) };
+      })
+      .filter(r => r.width < 44 || r.height < 44));
+    expect(small).toEqual([]);
+
+    // Form text is 16 px or more, so focusing a field never zooms the page on iOS.
+    const fontSizes = await phone.locator('select').evaluateAll(els => els.map(el => parseFloat(getComputedStyle(el).fontSize)));
+    expect(Math.min(...fontSizes)).toBeGreaterThanOrEqual(16);
+
+    // Glass: panels are frosted over the ambient light behind them.
+    expect(await phone.getByRole('region', { name: 'Source', exact: true }).evaluate(el => getComputedStyle(el).backdropFilter)).toMatch(/blur/);
+
+    // The action bar sits at the bottom edge with Play and Render, and never hides content.
+    const bar = phone.getByTestId('mobile-actions');
+    const barBox = (await bar.boundingBox())!;
+    expect(Math.round(barBox.y + barBox.height)).toBe(844);
+    expect(await bar.getByTestId('bar-play').isEnabled()).toBe(true);
+    await phone.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const footer = (await phone.getByRole('contentinfo').boundingBox())!;
+    expect(footer.y + footer.height).toBeLessThanOrEqual(barBox.y + 1);
+
+    // Render from the bar: the sheet opens; Esc cancels and the bar comes back.
+    await bar.getByTestId('bar-render').click();
+    await phone.getByTestId('render-orb').waitFor();
+    await phone.keyboard.press('Escape');
+    await phone.getByTestId('render-orb').waitFor({ state: 'detached', timeout: 30_000 });
+    expect(await bar.getByTestId('bar-render').isEnabled()).toBe(true);
+    expect(phoneErrors).toEqual([]);
+    await phone.close();
+  });
+
   it('raised no page or console errors', () => {
     expect(errors).toEqual([]);
   });

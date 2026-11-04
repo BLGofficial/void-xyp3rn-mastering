@@ -9,13 +9,18 @@ import type { Intention, Style } from '@/lib/auto';
 import { defaultState, type ChainState } from '@/lib/dsp';
 import { AutoPanel } from './AutoPanel';
 import { ChainRack } from './ChainRack';
+import { ControlGuide } from './ControlGuide';
 import { Header } from './Header';
+import { HintsProvider } from './hints';
 import { OutputPanel, type RenderedFile } from './OutputPanel';
 import { SourcePanel } from './SourcePanel';
 import { Transport } from './Transport';
 import { RenderOverlay } from './RenderOverlay';
 import { Panel } from './ui';
 import { Waveform } from './Waveform';
+
+/** localStorage key for the inline-hints preference. */
+const HINTS_KEY = 'xyp3rn.hints';
 
 type Loaded = LoadResult & { fileName: string; fileSize: number };
 /** A render is only current while the settings it was made from are unchanged. */
@@ -72,7 +77,20 @@ export function Studio() {
   const [cancellable, setCancellable] = useState(false);
   const [level, setLevel] = useState(0);
   const [autoUndo, setAutoUndo] = useState<{ chain: ChainState; ceiling: number } | null>(null);
+  const [hints, setHints] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const abort = useRef<AbortController | null>(null);
+
+  // Hints are a per-viewer preference. Read after mount (the static export has no
+  // storage); storage can be blocked, in which case hints simply start off.
+  useEffect(() => {
+    try { setHints(localStorage.getItem(HINTS_KEY) === '1'); } catch { /* blocked storage */ }
+  }, []);
+  const toggleHints = () => {
+    const next = !hints;
+    setHints(next);
+    try { localStorage.setItem(HINTS_KEY, next ? '1' : '0'); } catch { /* blocked storage */ }
+  };
 
   useEffect(() => {
     engine.current = createEngineClient();
@@ -264,61 +282,64 @@ export function Studio() {
 
   const duration = source ? source.metadata.length / source.sampleRate : 0;
   return (
-    <div className="min-h-screen">
-      <Header status={status} />
-      <RenderOverlay
-        open={rendering} status={status} progress={progress} level={level} onCancel={cancel}
-        sourceLufs={source?.metrics.loudness.integratedLufs ?? null} targetLufs={target === 'off' ? null : Number(target)}
-      />
-      <main ref={studio} className={`mx-auto grid max-w-[1440px] gap-4 px-4 pb-10 pt-4 md:px-8 lg:grid-cols-[minmax(0,1fr)_360px] ${introReady ? 'xr-studio-intro' : ''}`}>
-        <div className="min-w-0 space-y-4">
-          {!source && (
-            <p className="max-w-2xl text-sm text-ash">
-              EQ, dynamics, width, clip and true-peak limiting, measured to BS.1770. Local processing. No audio leaves the machine.
-            </p>
-          )}
-          {error && (
-            <div role="alert" data-testid="engine-error" className="border border-gold-dim bg-gold-glow px-4 py-3 text-sm text-cloud">{error}</div>
-          )}
-          <SourcePanel fileName={source?.fileName} fileSize={source?.fileSize} metadata={source?.metadata} metrics={source?.metrics} busy={busy} onFile={onFile} />
-          {source && (
-            <Panel title="Monitor">
-              <div className="space-y-4">
-                <Waveform
-                  source={source.metrics.waveform} master={result?.metrics.waveform} position={position} duration={duration}
-                  onSeek={s => { player.current?.seek(s); setPosition(player.current?.position() ?? s); }}
-                />
-                <Transport
-                  playing={playing} position={position} duration={duration} onPlay={togglePlay} disabled={!player.current}
-                  source={listenSource} onSource={() => { const v = !listenSource; setListenSource(v); player.current?.setSource(v); }}
-                  match={match} onMatch={() => { const v = !match; setMatch(v); player.current?.setMatch(v); }}
-                  meters={meters}
-                />
-              </div>
+    <HintsProvider value={hints}>
+      <div className="min-h-screen">
+        <Header status={status} hints={hints} onHints={toggleHints} onGuide={() => setGuideOpen(true)} />
+        <ControlGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
+        <RenderOverlay
+          open={rendering} status={status} progress={progress} level={level} onCancel={cancel}
+          sourceLufs={source?.metrics.loudness.integratedLufs ?? null} targetLufs={target === 'off' ? null : Number(target)}
+        />
+        <main ref={studio} className={`mx-auto grid max-w-[1440px] gap-4 px-4 pb-10 pt-4 md:px-8 lg:grid-cols-[minmax(0,1fr)_360px] ${introReady ? 'xr-studio-intro' : ''}`}>
+          <div className="min-w-0 space-y-4">
+            {!source && (
+              <p className="max-w-2xl text-sm text-ash">
+                EQ, dynamics, width, clip and true-peak limiting, measured to BS.1770. Local processing. No audio leaves the machine.
+              </p>
+            )}
+            {error && (
+              <div role="alert" data-testid="engine-error" className="border border-gold-dim bg-gold-glow px-4 py-3 text-sm text-cloud">{error}</div>
+            )}
+            <SourcePanel fileName={source?.fileName} fileSize={source?.fileSize} metadata={source?.metadata} metrics={source?.metrics} busy={busy} onFile={onFile} />
+            {source && (
+              <Panel title="Monitor">
+                <div className="space-y-4">
+                  <Waveform
+                    source={source.metrics.waveform} master={result?.metrics.waveform} position={position} duration={duration}
+                    onSeek={s => { player.current?.seek(s); setPosition(player.current?.position() ?? s); }}
+                  />
+                  <Transport
+                    playing={playing} position={position} duration={duration} onPlay={togglePlay} disabled={!player.current}
+                    source={listenSource} onSource={() => { const v = !listenSource; setListenSource(v); player.current?.setSource(v); }}
+                    match={match} onMatch={() => { const v = !match; setMatch(v); player.current?.setMatch(v); }}
+                    meters={meters}
+                  />
+                </div>
+              </Panel>
+            )}
+            <Panel title="Chain" aside={<span className="font-mono text-xs text-muted">In signal order</span>}>
+              <ChainRack state={chain} onChange={setChain} />
             </Panel>
-          )}
-          <Panel title="Chain" aside={<span className="font-mono text-xs text-muted">In signal order</span>}>
-            <ChainRack state={chain} onChange={setChain} />
-          </Panel>
-        </div>
-        <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
-          <AutoPanel
-            intention={intention} onIntention={setIntention} intensity={autoIntensity} onIntensity={setAutoIntensity}
-            canRun={!!source} busy={busy} onRun={runAuto} onPreset={runPreset} canUndo={!!autoUndo} onUndo={undoAuto} notes={result?.notes ?? null}
-          />
-          <OutputPanel
-            target={target} onTarget={setTarget} ceiling={ceiling} onCeiling={setCeiling} format={format} onFormat={setFormat}
-            dither={dither} onDither={setDither} canRender={!!source} busy={busy} rendering={rendering} progress={progress}
-            onRender={render} result={result} renderedFile={currentRenderedFile}
-            onPrepare={prepareCurrent} onReport={downloadReport} onAudioDownload={downloadEffectsPdf} cancellable={cancellable} onCancel={cancel}
-          />
-          <p className="mt-3 font-mono text-xs uppercase tracking-label text-muted">Suggests — never decides. You keep the final call.</p>
-        </aside>
-      </main>
-      <footer className="xr-glass border-t border-line px-4 py-2 font-mono text-xs uppercase tracking-label text-muted md:px-8">
-        XYP3RN Tech · Local processing · No audio leaves the machine · MP3 encoding by{' '}
-        <a className="text-ash underline-offset-2 hover:underline" href="https://lame.sourceforge.io" target="_blank" rel="noreferrer">LAME</a> (LGPL)
-      </footer>
-    </div>
+          </div>
+          <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+            <AutoPanel
+              intention={intention} onIntention={setIntention} intensity={autoIntensity} onIntensity={setAutoIntensity}
+              canRun={!!source} busy={busy} onRun={runAuto} onPreset={runPreset} canUndo={!!autoUndo} onUndo={undoAuto} notes={result?.notes ?? null}
+            />
+            <OutputPanel
+              target={target} onTarget={setTarget} ceiling={ceiling} onCeiling={setCeiling} format={format} onFormat={setFormat}
+              dither={dither} onDither={setDither} canRender={!!source} busy={busy} rendering={rendering} progress={progress}
+              onRender={render} result={result} renderedFile={currentRenderedFile}
+              onPrepare={prepareCurrent} onReport={downloadReport} onAudioDownload={downloadEffectsPdf} cancellable={cancellable} onCancel={cancel}
+            />
+            <p className="mt-3 font-mono text-xs uppercase tracking-label text-muted">Suggests — never decides. You keep the final call.</p>
+          </aside>
+        </main>
+        <footer className="xr-glass border-t border-line px-4 py-2 font-mono text-xs uppercase tracking-label text-muted md:px-8">
+          XYP3RN Tech · Local processing · No audio leaves the machine · MP3 encoding by{' '}
+          <a className="text-ash underline-offset-2 hover:underline" href="https://lame.sourceforge.io" target="_blank" rel="noreferrer">LAME</a> (LGPL)
+        </footer>
+      </div>
+    </HintsProvider>
   );
 }

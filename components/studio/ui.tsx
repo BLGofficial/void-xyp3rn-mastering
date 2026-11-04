@@ -2,6 +2,7 @@
 
 import { useId, type ReactNode } from 'react';
 import { param } from './format';
+import { Hint, useHint } from './hints';
 
 /** Panel with a mono label header (brand: Panel #0D0D0D, Card Border #222222). */
 export function Panel({ title, aside, children, className = '' }: { title: string; aside?: ReactNode; children: ReactNode; className?: string }) {
@@ -29,11 +30,14 @@ export function Readout({ label, value, unit, testId, emphasis = false }: { labe
   );
 }
 
-/** Native range input with brand styling and a spoken value. */
-export function Slider({ label, value, min, max, step, unit, disabled, onChange }: {
+/** Native range input with brand styling, a spoken value and its control-guide hint. */
+export function Slider({ label, value, min, max, step, unit, disabled, onChange, hint }: {
   label: string; value: number; min: number; max: number; step: number; unit: string; disabled?: boolean; onChange: (v: number) => void;
+  /** Control-guide key. */
+  hint: string;
 }) {
   const id = useId();
+  const h = useHint(hint);
   const text = param(value, step, unit);
   const progress = ((value - min) / (max - min)) * 100;
   return (
@@ -44,18 +48,23 @@ export function Slider({ label, value, min, max, step, unit, disabled, onChange 
       </div>
       <input
         id={id} type="range" className="xr-range" min={min} max={max} step={step} value={value} disabled={disabled}
-        aria-valuetext={text} style={{ ['--slider-progress' as string]: `${progress}%` }}
+        aria-valuetext={text} aria-describedby={h.id} style={{ ['--slider-progress' as string]: `${progress}%` }}
         onChange={e => onChange(Number(e.currentTarget.value))}
       />
+      <Hint hint={h} />
     </div>
   );
 }
 
 /** Two-state button (bypass, A/B, modes). */
-export function Toggle({ pressed, onClick, children, testId, label, disabled }: { pressed: boolean; onClick: () => void; children: ReactNode; testId?: string; label?: string; disabled?: boolean }) {
+export function Toggle({ pressed, onClick, children, testId, label, disabled, describedBy }: {
+  pressed: boolean; onClick: () => void; children: ReactNode; testId?: string; label?: string; disabled?: boolean;
+  /** Id of the control-guide hint (shared by a group of toggles). */
+  describedBy?: string;
+}) {
   return (
     <button
-      type="button" aria-pressed={pressed} aria-label={label} data-testid={testId} disabled={disabled} onClick={onClick}
+      type="button" aria-pressed={pressed} aria-label={label} aria-describedby={describedBy} data-testid={testId} disabled={disabled} onClick={onClick}
       className={`min-h-11 border px-2.5 py-1 font-mono text-xs uppercase tracking-label transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-0 ${
         pressed ? 'border-gold bg-gold text-studio' : 'border-line-card bg-surface text-ash hover:border-gold-dim hover:text-gold'
       }`}

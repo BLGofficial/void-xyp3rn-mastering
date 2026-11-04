@@ -9,6 +9,7 @@ import { crc32 } from 'node:zlib';
 import { chromium, type Browser, type Page } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { analyzeTrack, createBuffer, decodeWav, encodeWav } from '../lib/engine';
+import { GUIDE_KEYS, guideEntry } from '../lib/guide';
 import { serve } from '../scripts/serve-static.mjs';
 import { encodeFlac, encodeMp3 } from '../test/codec-fixtures';
 import { program } from '../test/signals';
@@ -231,6 +232,61 @@ describe('XYP3RN MASTERING studio', () => {
     const pages = Number(/\/Type \/Pages \/Count (\d+)/.exec(pdf)![1]);
     expect(pages).toBeGreaterThanOrEqual(2);
     expect(pdf.match(/\/Filter \/DCTDecode/g)).toHaveLength(pages);
+  });
+
+  it('documents every control: inline hints bound to the control, and the guide drawer', async () => {
+    // Which guide hints are in the DOM, and which a present control points at via aria-describedby.
+    const snapshot = () => page.evaluate(() => {
+      const referenced = new Set<string>();
+      document.querySelectorAll('[aria-describedby]').forEach(el => el.getAttribute('aria-describedby')!.split(/\s+/).forEach(id => referenced.add(id)));
+      return [...document.querySelectorAll<HTMLElement>('[data-guide]')].map(h => ({ key: h.dataset.guide!, referenced: referenced.has(h.id) }));
+    });
+    const present = new Set<string>(), referenced = new Set<string>();
+    const take = async () => {
+      const hints = await snapshot();
+      // One hint per control: a duplicated key would mean two controls share a description by mistake.
+      expect(hints.length).toBe(new Set(hints.map(h => h.key)).size);
+      for (const h of hints) { present.add(h.key); if (h.referenced) referenced.add(h.key); }
+    };
+    await take(); // rendered file on screen: downloads
+    await page.getByTestId('format-select').selectOption('mp3-192');
+    await page.getByTestId('prepare-file').waitFor();
+    await take(); // render without a file for this format: prepare
+    await page.getByTestId('format-select').selectOption('pcm24');
+    await page.getByTestId('rendered-file-name').waitFor();
+    await page.getByRole('button', { name: '+ Space' }).click();
+    await page.getByRole('button', { name: '+ Echo' }).click();
+    await take(); // sends added: their parameters and Remove
+    expect([...present].sort()).toEqual([...GUIDE_KEYS].sort());
+    // Cancel exists only while a non-render operation runs; its button is covered by the cancel test.
+    expect([...referenced].sort()).toEqual(GUIDE_KEYS.filter(k => k !== 'cancel').sort());
+
+    // Hints are screen-reader descriptions until switched on, then print under each control.
+    const renderHint = page.locator('[data-guide="render"]');
+    expect(await renderHint.isVisible()).toBe(false);
+    await page.getByTestId('hints-toggle').click();
+    await expect(page.getByTestId('hints-toggle').getAttribute('aria-pressed')).resolves.toBe('true');
+    expect(await renderHint.isVisible()).toBe(true);
+    expect(await renderHint.textContent()).toBe(guideEntry('render').text);
+    expect(await page.locator('[data-guide="eq.lowDb"]').isVisible()).toBe(true);
+    await page.getByTestId('hints-toggle').click();
+    expect(await renderHint.isVisible()).toBe(false);
+
+    // The drawer lists every entry, traps focus as a modal, closes on Esc and returns focus.
+    await page.getByTestId('guide-open').click();
+    const drawer = page.getByRole('dialog', { name: 'Control guide' });
+    await drawer.waitFor();
+    expect(await drawer.locator('[data-guide-entry]').count()).toBe(GUIDE_KEYS.length);
+    expect(await drawer.getByText(guideEntry('limit.truePeak').text).isVisible()).toBe(true);
+    expect(await page.evaluate(() => document.activeElement?.closest('dialog') !== null)).toBe(true);
+    await page.keyboard.press('Escape');
+    await drawer.waitFor({ state: 'hidden' });
+    expect(await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.testid)).toBe('guide-open');
+
+    // Back to the chain the rendered file was made from.
+    await page.getByRole('button', { name: 'Remove Space' }).click();
+    await page.getByRole('button', { name: 'Remove Echo' }).click();
+    await page.getByTestId('rendered-file-name').waitFor();
   });
 
   it('undoes an automatic master back to the chain it replaced', async () => {

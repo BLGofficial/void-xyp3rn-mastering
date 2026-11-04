@@ -1,6 +1,7 @@
 'use client';
 
 import { INTENTIONS, type Intention, type Style } from '@/lib/auto';
+import { Hint, useHint } from './hints';
 import { Panel, Slider } from './ui';
 
 const LABELS: Record<Intention, string> = {
@@ -19,6 +20,7 @@ export function AutoPanel({ intention, onIntention, intensity, onIntensity, canR
   canUndo: boolean; onUndo: () => void; notes: string[] | null;
 }) {
   const effective = intensity ?? INTENTIONS[intention].intensity;
+  const hPreset = useHint('preset'), hIntention = useHint('intention'), hRun = useHint('auto-run'), hUndo = useHint('auto-undo');
   return (
     <Panel title="Auto" aside={<span className="font-mono text-xs text-muted">Local · deterministic</span>}>
       <div className="space-y-3">
@@ -27,31 +29,39 @@ export function AutoPanel({ intention, onIntention, intensity, onIntensity, canR
           <div className="mt-1 grid grid-cols-3 gap-2">
             {(['natural', 'warm', 'punchy'] as Style[]).map(style => (
               <button
-                key={style} type="button" data-testid={`preset-${style}`} className="xr-button px-2 capitalize"
+                key={style} type="button" data-testid={`preset-${style}`} className="xr-button px-2 capitalize" aria-describedby={hPreset.id}
                 disabled={!canRun || busy} onClick={() => onPreset(style)}
               >
                 {style}
               </button>
             ))}
           </div>
+          <Hint hint={hPreset} />
         </div>
         <label className="block">
           <span className="xr-label">Intention</span>
           <select
-            data-testid="auto-intention" className="xr-select mt-1" value={intention}
+            data-testid="auto-intention" className="xr-select mt-1" value={intention} aria-describedby={hIntention.id}
             onChange={e => { onIntention(e.currentTarget.value as Intention); onIntensity(null); }}
           >
             {(Object.keys(INTENTIONS) as Intention[]).map(k => <option key={k} value={k}>{LABELS[k]}</option>)}
           </select>
+          <Hint hint={hIntention} />
         </label>
-        <Slider label="Intensity" value={effective} min={0} max={100} step={1} unit="%" onChange={onIntensity} />
+        <Slider label="Intensity" value={effective} min={0} max={100} step={1} unit="%" onChange={onIntensity} hint="intensity" />
         <p className="text-xs text-ash">Dense sources cap at 35%. Uses the target and ceiling below.</p>
-        <button type="button" data-testid="auto-run" className="xr-button w-full" disabled={!canRun || busy} onClick={onRun}>
-          {busy ? 'Working…' : 'Suggest a master'}
-        </button>
-        <button type="button" data-testid="auto-undo" className="xr-button w-full" disabled={!canUndo || busy} onClick={onUndo}>
-          Undo auto
-        </button>
+        <div>
+          <button type="button" data-testid="auto-run" className="xr-button w-full" aria-describedby={hRun.id} disabled={!canRun || busy} onClick={onRun}>
+            {busy ? 'Working…' : 'Suggest a master'}
+          </button>
+          <Hint hint={hRun} />
+        </div>
+        <div>
+          <button type="button" data-testid="auto-undo" className="xr-button w-full" aria-describedby={hUndo.id} disabled={!canUndo || busy} onClick={onUndo}>
+            Undo auto
+          </button>
+          <Hint hint={hUndo} />
+        </div>
       </div>
       {notes && (
         <ol data-testid="auto-notes" className="xr-reveal mt-4 space-y-1.5 border-t border-line pt-3 text-xs text-ash">

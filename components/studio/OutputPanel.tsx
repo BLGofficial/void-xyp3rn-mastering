@@ -3,6 +3,7 @@
 import { isMp3, type ExportFormat } from '@/audio/export-flow';
 import type { RenderResult } from '@/audio/protocol';
 import { num } from './format';
+import { Hint, useHint } from './hints';
 import { Panel, Readout } from './ui';
 
 export interface RenderedFile {
@@ -70,45 +71,59 @@ export function OutputPanel(props: {
   // Dither applies at PCM quantisation only; MP3 and float have none.
   const ditherable = props.format === 'pcm16' || props.format === 'pcm24';
   const kind = isMp3(props.format) ? 'MP3' : 'WAV';
+  const h = {
+    target: useHint('target'), ceiling: useHint('ceiling'), format: useHint('format'), dither: useHint('dither'), render: useHint('render'),
+    cancel: useHint('cancel'), prepare: useHint('prepare'), download: useHint('download'), bundle: useHint('bundle'),
+  };
+  const showCancel = props.cancellable && !props.rendering;
+  const showPrepare = !!result && !props.renderedFile && !props.rendering;
   return (
     <Panel title="Output">
       <div className="space-y-3">
         <label className="block">
           <span className="xr-label">Loudness target</span>
-          <select data-testid="target-select" className="xr-select mt-1" value={props.target} onChange={e => props.onTarget(e.currentTarget.value)}>
+          <select data-testid="target-select" className="xr-select mt-1" aria-describedby={h.target.id} value={props.target} onChange={e => props.onTarget(e.currentTarget.value)}>
             {TARGETS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
+          <Hint hint={h.target} />
         </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="xr-label">True-peak ceiling</span>
-            <select className="xr-select mt-1" value={props.ceiling} onChange={e => props.onCeiling(Number(e.currentTarget.value))}>
+            <select className="xr-select mt-1" aria-describedby={h.ceiling.id} value={props.ceiling} onChange={e => props.onCeiling(Number(e.currentTarget.value))}>
               {CEILINGS.map(c => <option key={c} value={c}>{num(c)} dBTP</option>)}
             </select>
           </label>
           <label className="block">
             <span className="xr-label">Format</span>
-            <select data-testid="format-select" className="xr-select mt-1" value={props.format} onChange={e => props.onFormat(e.currentTarget.value as ExportFormat)}>
+            <select data-testid="format-select" className="xr-select mt-1" aria-describedby={h.format.id} value={props.format} onChange={e => props.onFormat(e.currentTarget.value as ExportFormat)}>
               {FORMATS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
             </select>
           </label>
         </div>
+        {/* Two selects share a row; their hints print full-width beneath it. */}
+        <Hint hint={h.ceiling} />
+        <Hint hint={h.format} />
         <label className="flex min-h-11 items-center gap-2 text-xs text-ash sm:min-h-0">
-          <input data-testid="dither" type="checkbox" className="h-4 w-4" checked={props.dither && ditherable} disabled={!ditherable} onChange={e => props.onDither(e.currentTarget.checked)} />
+          <input data-testid="dither" type="checkbox" className="h-4 w-4" aria-describedby={h.dither.id} checked={props.dither && ditherable} disabled={!ditherable} onChange={e => props.onDither(e.currentTarget.checked)} />
           TPDF dither on PCM export
         </label>
+        <Hint hint={h.dither} />
         {isMp3(props.format) && (
           <p className="text-xs text-muted">MP3 is decoded and re-measured after encoding; codec gain is trimmed until the decoded file holds the ceiling.</p>
         )}
-        <button type="button" data-testid="render" className="xr-button-primary w-full" disabled={!props.canRender || props.busy} onClick={props.onRender}>
+        <button type="button" data-testid="render" className="xr-button-primary w-full" aria-describedby={h.render.id} disabled={!props.canRender || props.busy} onClick={props.onRender}>
           {props.busy ? 'Rendering…' : 'Render master'}
         </button>
+        <Hint hint={h.render} />
         {/* Renders get a full-screen overlay with its own Cancel; other operations cancel here. */}
-        {props.cancellable && !props.rendering && (
-          <button type="button" data-testid="cancel" className="xr-button w-full" onClick={props.onCancel}>
+        {showCancel && (
+          <button type="button" data-testid="cancel" className="xr-button w-full" aria-describedby={h.cancel.id} onClick={props.onCancel}>
             Cancel
           </button>
         )}
+        {/* Cancel appears only mid-operation; its hint stays mounted so the guide always has it. */}
+        <Hint hint={h.cancel} show={showCancel} />
         {props.progress !== null && (
           <progress className="block h-1 w-full" max={1} value={props.progress} aria-label="Render progress" />
         )}
@@ -137,10 +152,13 @@ export function OutputPanel(props: {
               ))}
             </ul>
           )}
-          {!props.renderedFile && !props.rendering && (
-            <button type="button" data-testid="prepare-file" className="xr-button w-full" disabled={props.busy} onClick={props.onPrepare}>
-              {props.busy ? 'Preparing…' : `Prepare ${kind} from this render`}
-            </button>
+          {showPrepare && (
+            <div>
+              <button type="button" data-testid="prepare-file" className="xr-button w-full" aria-describedby={h.prepare.id} disabled={props.busy} onClick={props.onPrepare}>
+                {props.busy ? 'Preparing…' : `Prepare ${kind} from this render`}
+              </button>
+              <Hint hint={h.prepare} />
+            </div>
           )}
           {props.renderedFile && (
             <div className="space-y-3 border-t border-line pt-4">
@@ -153,13 +171,15 @@ export function OutputPanel(props: {
               <a
                 data-testid="export" href={props.renderedFile.url} download={props.renderedFile.name} onClick={props.onAudioDownload}
                 // Links can't be disabled; match the buttons while an operation runs.
-                aria-disabled={props.busy} className={`xr-button block w-full text-center ${props.busy ? 'pointer-events-none opacity-50' : ''}`}
+                aria-disabled={props.busy} aria-describedby={h.download.id} className={`xr-button block w-full text-center ${props.busy ? 'pointer-events-none opacity-50' : ''}`}
               >
                 Download {props.renderedFile.name.endsWith('.mp3') ? 'MP3' : 'WAV'} + PDF report
               </a>
-              <button type="button" data-testid="report-bundle" className="xr-button w-full" disabled={props.busy} onClick={props.onReport}>
+              <Hint hint={h.download} />
+              <button type="button" data-testid="report-bundle" className="xr-button w-full" aria-describedby={h.bundle.id} disabled={props.busy} onClick={props.onReport}>
                 Download with PDF report (ZIP)
               </button>
+              <Hint hint={h.bundle} />
             </div>
           )}
         </div>

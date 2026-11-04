@@ -1,6 +1,8 @@
 'use client';
 
 import { createState, DEFINITIONS, MAX_PROCESSORS, type ChainState, type ProcessorId, type ProcessorState, type Quality } from '@/lib/dsp';
+import { paramKey } from '@/lib/guide';
+import { Hint, useHint } from './hints';
 import { Slider, Toggle } from './ui';
 
 /** Integer 0/1 parameters are modes, not continuous controls. */
@@ -16,7 +18,28 @@ function nextInstanceId(state: ChainState) {
   return `slot-${n}`;
 }
 
-function ModuleCard({ proc, onChange, onRemove }: { proc: ProcessorState; onChange: (p: ProcessorState) => void; onRemove?: () => void }) {
+/** Two-state parameter (detector modes) with its guide hint. */
+function ModeSwitch({ label, names, value, hint, onChange }: { label: string; names: [string, string]; value: number | undefined; hint: string; onChange: (v: number) => void }) {
+  const h = useHint(hint);
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-ash">{label}</span>
+        <div className="flex gap-1">
+          {names.map((name, v) => (
+            <Toggle key={name} pressed={value === v} onClick={() => onChange(v)} describedBy={h.id}>{name}</Toggle>
+          ))}
+        </div>
+      </div>
+      <Hint hint={h} />
+    </div>
+  );
+}
+
+/** Bypass and Remove share one chain-level hint each; the card only points at them. */
+interface ChainHints { bypass: string; remove: string }
+
+function ModuleCard({ proc, onChange, onRemove, hints }: { proc: ProcessorState; onChange: (p: ProcessorState) => void; onRemove?: () => void; hints: ChainHints }) {
   const def = DEFINITIONS[proc.id];
   const set = (key: string, value: number) => onChange({ ...proc, parameters: { ...proc.parameters, [key]: value } });
   return (
@@ -24,8 +47,8 @@ function ModuleCard({ proc, onChange, onRemove }: { proc: ProcessorState; onChan
       <header className="mb-3 flex items-center justify-between gap-2">
         <h3 className={`font-heading text-sm font-bold ${proc.bypassed ? 'text-ash' : 'text-cloud'}`}>{def.name}</h3>
         <div className="flex gap-1.5">
-          {onRemove && <button type="button" onClick={onRemove} className="min-h-11 min-w-11 px-1.5 font-mono text-xs uppercase text-muted hover:text-gold sm:min-h-0 sm:min-w-0" aria-label={`Remove ${def.name}`}>✕</button>}
-          <Toggle pressed={!proc.bypassed} onClick={() => onChange({ ...proc, bypassed: !proc.bypassed })} label={`${def.name} on`}>
+          {onRemove && <button type="button" onClick={onRemove} className="min-h-11 min-w-11 px-1.5 font-mono text-xs uppercase text-muted hover:text-gold sm:min-h-0 sm:min-w-0" aria-label={`Remove ${def.name}`} aria-describedby={hints.remove}>✕</button>}
+          <Toggle pressed={!proc.bypassed} onClick={() => onChange({ ...proc, bypassed: !proc.bypassed })} label={`${def.name} on`} describedBy={hints.bypass}>
             {proc.bypassed ? 'Off' : 'On'}
           </Toggle>
         </div>
@@ -33,16 +56,15 @@ function ModuleCard({ proc, onChange, onRemove }: { proc: ProcessorState; onChan
       <div className="space-y-2.5">
         {Object.entries(def.parameters).map(([key, p]) =>
           MODE_LABELS[key] ? (
-            <div key={key} className="flex items-center justify-between gap-2">
-              <span className="text-xs text-ash">{p.label.replace(/ \(.*\)$/, '')}</span>
-              <div className="flex gap-1">
-                {MODE_LABELS[key]!.map((name, v) => (
-                  <Toggle key={name} pressed={proc.parameters[key] === v} onClick={() => set(key, v)}>{name}</Toggle>
-                ))}
-              </div>
-            </div>
+            <ModeSwitch
+              key={key} label={p.label.replace(/ \(.*\)$/, '')} names={MODE_LABELS[key]!} value={proc.parameters[key]}
+              hint={paramKey(proc.id, key)} onChange={v => set(key, v)}
+            />
           ) : (
-            <Slider key={key} label={p.label} value={proc.parameters[key]!} min={p.min} max={p.max} step={p.step} unit={p.unit} onChange={v => set(key, v)} />
+            <Slider
+              key={key} label={p.label} value={proc.parameters[key]!} min={p.min} max={p.max} step={p.step} unit={p.unit}
+              hint={paramKey(proc.id, key)} onChange={v => set(key, v)}
+            />
           ),
         )}
       </div>
@@ -64,26 +86,38 @@ export function ChainRack({ state, onChange }: { state: ChainState; onChange: (s
   };
   const quality = state.quality ?? 'standard';
   const setQuality = (q: Quality) => onChange({ ...state, quality: q });
+  const hAdd = useHint('add'), hQuality = useHint('quality'), hBypass = useHint('bypass'), hRemove = useHint('remove');
+  const addable = SENDS.filter(id => !state.processors.some(p => p.id === id));
+  const removable = state.processors.some(p => SENDS.includes(p.id));
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap gap-1.5">
-          {SENDS.filter(id => !state.processors.some(p => p.id === id)).map(id => (
-            <button key={id} type="button" className="xr-button" disabled={state.processors.length >= MAX_PROCESSORS} onClick={() => add(id)}>
+          {addable.map(id => (
+            <button key={id} type="button" className="xr-button" aria-describedby={hAdd.id} disabled={state.processors.length >= MAX_PROCESSORS} onClick={() => add(id)}>
               + {DEFINITIONS[id].name}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-2">
           <span className="xr-label">Clip quality</span>
-          <Toggle pressed={quality === 'standard'} onClick={() => setQuality('standard')}>Standard</Toggle>
-          <Toggle pressed={quality === 'studio'} onClick={() => setQuality('studio')}>4x Studio</Toggle>
+          <Toggle pressed={quality === 'standard'} onClick={() => setQuality('standard')} describedBy={hQuality.id}>Standard</Toggle>
+          <Toggle pressed={quality === 'studio'} onClick={() => setQuality('studio')} describedBy={hQuality.id}>4x Studio</Toggle>
         </div>
+      </div>
+      <div className="mb-3 [&>p]:mt-0 [&>p+p]:mt-1">
+        <Hint hint={hAdd} show={addable.length > 0} />
+        <Hint hint={hQuality} />
+        <Hint hint={hBypass} />
+        <Hint hint={hRemove} show={removable} />
       </div>
       {/* Multi-column packs uneven cards; order still reads top-to-bottom per column. */}
       <div className="gap-3 sm:columns-2 2xl:columns-3 [&>article]:mb-3 [&>article]:break-inside-avoid">
         {state.processors.map((p, i) => (
-          <ModuleCard key={p.instanceId} proc={p} onChange={next => replace(i, next)} onRemove={SENDS.includes(p.id) ? () => remove(i) : undefined} />
+          <ModuleCard
+            key={p.instanceId} proc={p} onChange={next => replace(i, next)} onRemove={SENDS.includes(p.id) ? () => remove(i) : undefined}
+            hints={{ bypass: hBypass.id, remove: hRemove.id }}
+          />
         ))}
       </div>
     </div>

@@ -218,7 +218,7 @@ CODE        #0A0A0A bg         #D4D4D4 fg
 
 ### 3.1 Families
 
-**[O]** Four families, loaded via `next/font/google` with `display: 'swap'`, exposed as CSS variables, one role each. The brief's single "primary font" field is ambiguous for this system, so the mapping is given explicitly:
+**[O]** Four families, self-hosted via `next/font/local` from the pinned Fontsource packages with `display: 'swap'`, exposed as CSS variables, one role each. Self-hosting keeps the static PWA and offline builds independent of Google Fonts. The brief's single "primary font" field is ambiguous for this system, so the mapping is given explicitly:
 
 | Role | Family | Variable | Fallback stack | Declared by |
 | --- | --- | --- | --- | --- |

@@ -36,11 +36,20 @@ const VERTEX = /* glsl */ `
   uniform float uPeak;      // 0..1: block peak approaching full scale
   uniform float uMeasure;   // 0..1: loudness measurement stage
   uniform float uGuard;     // 0..1: true-peak check stage
+  uniform float uAudioEnabled;
+  uniform float uSubBass;
+  uniform float uBass;
+  uniform float uMid;
+  uniform float uTreble;
+  uniform float uKickImpulse;
+  uniform sampler2D uAudioTex;
 
   varying float vAlpha;
   varying float vRidge;
   varying vec3 vUnitPos;
   varying float vAiScan;
+  varying float vFreqAmp;
+  varying float vEnergy;
 
   vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
   vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
@@ -97,7 +106,13 @@ const VERTEX = /* glsl */ `
 
     vec3 tangent = normalize(cross(norm, vec3(0.0, 1.0, 0.2)));
     vec3 bitangent = cross(norm, tangent);
-    vec3 sphereDir = normalize(norm + tangent * (n2 * 0.18) + bitangent * (n1 * 0.15));
+    float audioFlow = uAudioEnabled * (uMid * 0.16 + uBass * 0.10);
+    vec3 sphereDir = normalize(norm + tangent * (n2 * (0.18 + audioFlow)) + bitangent * (n1 * (0.15 + audioFlow)));
+
+    float latUv = clamp(abs(sphereDir.y) * 0.85 + abs(n1) * 0.15, 0.0, 1.0);
+    float fftBin = texture2D(uAudioTex, vec2(latUv, 0.5)).r * uAudioEnabled;
+    vFreqAmp = fftBin;
+    vEnergy = uBass * 0.6 + uMid * 0.5 + uTreble * 0.6;
 
     float rawChaos = (1.0 - uProgress);
     float aiJitter = snoise(sphereDir * 5.5 + uTime * 3.5) * rawChaos * 0.20;
@@ -111,8 +126,15 @@ const VERTEX = /* glsl */ `
     float sweepBand = exp(-pow((sphereDir.y - sweepY) * 6.0, 2.0)) * uMeasure;
 
     // Gain reduction squeezes the shell inward; the peak check tightens it to the ceiling.
+    float kickExpansion = uAudioEnabled * (uKickImpulse * 0.26 + uSubBass * 0.18);
+    float harmonicWave = sin(sphereDir.y * 10.0 - uTime * 9.0)
+      * cos(sphereDir.x * 8.0 + uTime * 6.0) * uMid * 0.16 * uAudioEnabled;
+    float spectralExtrusion = fftBin * 0.24 * (0.5 + 0.5 * sin(n2 * 6.28));
+    float trebleShimmer = snoise(sphereDir * 6.5 + uTime * 5.0) * uTreble * 0.10 * uAudioEnabled;
+
     float finalRadius = uRadius - inwardFold + aiJitter + scanWave * 0.07 + uTransient * 0.12 + lockShockwave
-      - uReduction * 0.16 - uGuard * 0.05 + sweepBand * 0.06;
+      - uReduction * 0.16 - uGuard * 0.05 + sweepBand * 0.06
+      + kickExpansion + harmonicWave + spectralExtrusion + trebleShimmer;
     vec3 pos = sphereDir * finalRadius;
 
     vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
@@ -127,21 +149,29 @@ const VERTEX = /* glsl */ `
     float innerWindow = smoothstep(-0.28, 0.22, shellMask + abs(sphereDir.x) * 0.35);
     float visibility = max(innerWindow, rimGlow * (0.82 + uProgress * 0.18));
 
-    vRidge = clamp(rimGlow * 1.1 + abs(n2) * 0.65 + abs(scanWave) * 0.6 + uReduction * 0.2 + uPeak * 0.45 + uGuard * rimGlow * 0.3, 0.0, 1.7);
+    vRidge = clamp(rimGlow * 1.1 + abs(n2) * 0.65 + abs(scanWave) * 0.6 + uReduction * 0.2 + uPeak * 0.45 + uGuard * rimGlow * 0.3
+      + fftBin * 0.75 + uKickImpulse * 0.5 * uAudioEnabled, 0.0, 1.8);
     vAlpha = visibility * (0.22 + vRidge * 0.78);
     vUnitPos = sphereDir;
-    vAiScan = rawChaos * 0.85 + abs(scanWave) * 0.6 + sweepBand * 0.8 + uPeak * 0.4;
+    vAiScan = rawChaos * 0.85 + abs(scanWave) * 0.6 + sweepBand * 0.8 + uPeak * 0.4
+      + (fftBin + uTreble + uKickImpulse) * 0.2 * uAudioEnabled;
 
-    gl_PointSize = (2.4 + vRidge * 1.8 + rawChaos * 1.6) * uPixelRatio * uScale * (1.0 / -mvPosition.z);
+    gl_PointSize = (2.4 + vRidge * 1.8 + rawChaos * 1.6 + fftBin * 2.6 + uTreble * 2.4 * uAudioEnabled)
+      * uPixelRatio * uScale * (1.0 / -mvPosition.z);
   }
 `;
 
 const FRAGMENT = /* glsl */ `
   uniform float uProgress;
+  uniform float uAudioEnabled;
+  uniform float uTreble;
+  uniform float uKickImpulse;
   varying float vAlpha;
   varying float vRidge;
   varying vec3 vUnitPos;
   varying float vAiScan;
+  varying float vFreqAmp;
+  varying float vEnergy;
 
   void main() {
     if (vAlpha < 0.025) discard;
@@ -161,10 +191,12 @@ const FRAGMENT = /* glsl */ `
     float warmZone = smoothstep(0.35, -0.75, vUnitPos.x) * smoothstep(0.55, -0.55, vUnitPos.y);
     col = mix(col, xypGold, warmZone * 0.65);
 
-    col = mix(col, cloud, vAiScan * 0.45);
+    float audioHot = clamp(vFreqAmp * 0.55 + uTreble * 0.45 + uKickImpulse * 0.35, 0.0, 0.85) * uAudioEnabled;
+    col = mix(col, cloud, max(vAiScan * 0.45, audioHot));
     col += vec3(0.16, 0.12, 0.02) * pow(vRidge, 2.0);
 
-    gl_FragColor = vec4(col, soft * vAlpha * (0.78 + uProgress * 0.18));
+    float audioGlow = min(0.04, vEnergy * 0.01) * uAudioEnabled;
+    gl_FragColor = vec4(col, soft * vAlpha * (0.78 + uProgress * 0.18 + audioGlow));
   }
 `;
 
@@ -173,6 +205,16 @@ const LOCK_PULSE_SECONDS = 2.5;
 
 /** What the engine is doing; selects the orb's stage motion. */
 export type OrbPhase = 'analyse' | 'render' | 'measure' | 'peak' | 'locked';
+
+/** Frequency and level data from an AudioAnalyserNode, ready for the orb shader. */
+export interface OrbAudioFrame {
+  spectrum: Uint8Array;
+  subBass: number;
+  bass: number;
+  mid: number;
+  treble: number;
+  energy: number;
+}
 
 /** Ease `current` toward `target`: `attack` per second rising, `release` falling. */
 const follow = (current: number, target: number, delta: number, attack: number, release: number) =>
@@ -191,6 +233,8 @@ export class XYP3RNMasteringOrb {
   private readonly orb: THREE.Points;
   private readonly resize: ResizeObserver;
   private readonly clock = new THREE.Clock();
+  private readonly audioBins = new Uint8Array(64);
+  private readonly audioTexture: THREE.DataTexture;
   /** True on software WebGL (SwiftShader, llvmpipe, …): there the orb runs at a few fps and stalls the page. */
   readonly software: boolean;
   private frame = 0;
@@ -202,9 +246,15 @@ export class XYP3RNMasteringOrb {
   private peakTarget = 0;
   private measureTarget = 0;
   private guardTarget = 0;
+  private audioSubTarget = 0;
+  private audioBassTarget = 0;
+  private audioMidTarget = 0;
+  private audioTrebleTarget = 0;
+  private audioKickTarget = 0;
+  private previousAudioBass = 0;
 
   /** Throws if WebGL is unavailable; callers fall back to a non-WebGL visual. */
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, options: { zoom?: boolean } = {}) {
     this.container = container;
     const { width, height } = this.size();
     // FOV 46 keeps the orb inside portrait (phone) viewports.
@@ -232,6 +282,11 @@ export class XYP3RNMasteringOrb {
     // 180x135 (~24k points, a third fewer than before) keeps mobile GPUs at 60 fps.
     const radius = 1.1;
     this.geometry = new THREE.SphereGeometry(radius, 180, 135);
+    this.audioTexture = new THREE.DataTexture(this.audioBins, this.audioBins.length, 1, THREE.RedFormat, THREE.UnsignedByteType);
+    this.audioTexture.minFilter = THREE.LinearFilter;
+    this.audioTexture.magFilter = THREE.LinearFilter;
+    this.audioTexture.generateMipmaps = false;
+    this.audioTexture.needsUpdate = true;
     this.material = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
@@ -248,6 +303,13 @@ export class XYP3RNMasteringOrb {
         uPeak: { value: 0 },
         uMeasure: { value: 0 },
         uGuard: { value: 0 },
+        uAudioEnabled: { value: 0 },
+        uSubBass: { value: 0 },
+        uBass: { value: 0 },
+        uMid: { value: 0 },
+        uTreble: { value: 0 },
+        uKickImpulse: { value: 0 },
+        uAudioTex: { value: this.audioTexture },
       },
       vertexShader: VERTEX,
       fragmentShader: FRAGMENT,
@@ -260,7 +322,9 @@ export class XYP3RNMasteringOrb {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
     this.controls.enablePan = false;
-    this.controls.enableZoom = false;
+    this.controls.enableZoom = options.zoom ?? false;
+    this.controls.minDistance = 3.5;
+    this.controls.maxDistance = 8.5;
     this.controls.rotateSpeed = 0.8;
     this.renderer.domElement.style.touchAction = 'none';
 
@@ -277,6 +341,35 @@ export class XYP3RNMasteringOrb {
   /** Audio energy, 0..1. */
   setTransient(value: number): void {
     this.transientTarget = clamp01(value);
+  }
+
+  /** Enable the FFT-driven shape and colour response (off for render-overlay orbs). */
+  setAudioReactive(enabled: boolean): void {
+    this.material.uniforms.uAudioEnabled!.value = enabled ? 1 : 0;
+    if (!enabled) {
+      this.audioSubTarget = this.audioBassTarget = this.audioMidTarget = this.audioTrebleTarget = 0;
+      this.audioKickTarget = this.previousAudioBass = 0;
+      this.audioBins.fill(0);
+      this.audioTexture.needsUpdate = true;
+    }
+  }
+
+  /** Push one 64-bin FFT frame and smoothed band targets into the GPU visualizer. */
+  setAudioFrame(frame: OrbAudioFrame): void {
+    this.audioBins.fill(0);
+    this.audioBins.set(frame.spectrum.subarray(0, this.audioBins.length));
+    this.audioTexture.needsUpdate = true;
+    this.audioSubTarget = clamp01(frame.subBass);
+    this.audioBassTarget = clamp01(frame.bass);
+    this.audioMidTarget = clamp01(frame.mid);
+    this.audioTrebleTarget = clamp01(frame.treble);
+    this.transientTarget = clamp01(frame.energy);
+
+    const bassDelta = this.audioBassTarget - this.previousAudioBass;
+    if (bassDelta > 0.12 && this.audioBassTarget > 0.35) {
+      this.audioKickTarget = Math.min(1.3, this.audioKickTarget + bassDelta * 2.4);
+    }
+    this.previousAudioBass = this.audioBassTarget;
   }
 
   /** Gain reduction the chain applies right now, 0..1 (callers map dB). */
@@ -319,6 +412,7 @@ export class XYP3RNMasteringOrb {
     this.resize.disconnect();
     this.controls.dispose();
     this.geometry.dispose();
+    this.audioTexture.dispose();
     this.material.dispose();
     this.bloom.dispose();
     this.composer.dispose();
@@ -345,13 +439,25 @@ export class XYP3RNMasteringOrb {
     this.peakTarget *= Math.max(0, 1 - delta * 8);
     u.uMeasure!.value = follow(u.uMeasure!.value as number, this.measureTarget, delta, 3, 3);
     u.uGuard!.value = follow(u.uGuard!.value as number, this.guardTarget, delta, 3, 3);
+    u.uSubBass!.value = follow(u.uSubBass!.value as number, this.audioSubTarget, delta, 9, 3);
+    u.uBass!.value = follow(u.uBass!.value as number, this.audioBassTarget, delta, 10, 3.5);
+    u.uMid!.value = follow(u.uMid!.value as number, this.audioMidTarget, delta, 8, 3.5);
+    u.uTreble!.value = follow(u.uTreble!.value as number, this.audioTrebleTarget, delta, 12, 4);
+    u.uKickImpulse!.value = follow(u.uKickImpulse!.value as number, this.audioKickTarget, delta, 28, 7);
+    this.audioKickTarget *= Math.max(0, 1 - delta * 5);
+
+    const audioEnabled = u.uAudioEnabled!.value as number;
+    const audioMotion = audioEnabled * ((u.uBass!.value as number) * 0.65 + (u.uKickImpulse!.value as number) * 0.4);
+    this.bloom.strength = bloomStrength(this.container.clientHeight)
+      + audioEnabled * ((u.uBass!.value as number) * 0.18 + (u.uKickImpulse!.value as number) * 0.18);
 
     const lock = u.uLockPulse!.value as number;
     if (lock > 0) u.uLockPulse!.value = lock + delta > LOCK_PULSE_SECONDS ? 0 : lock + delta;
 
     const progress = u.uProgress!.value as number;
-    this.orb.rotation.y = elapsed * (0.12 + (1 - progress) * 0.18);
-    this.orb.rotation.z = Math.sin(elapsed * 0.22) * 0.12;
+    this.orb.rotation.y = elapsed * (0.12 + (1 - progress) * 0.18 + audioMotion);
+    this.orb.rotation.z = Math.sin(elapsed * 0.22) * 0.12
+      + (u.uMid!.value as number) * 0.12 * audioEnabled;
     this.controls.update();
     this.composer.render();
   };

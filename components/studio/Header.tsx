@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { XyperMark } from '../brand/XyperMark';
 
 /** navigator.onLine, live. Starts online so the static HTML matches the first client render. */
@@ -44,7 +45,8 @@ export function Header({ status, hints, onHints, onGuide }: {
             <span className="mb-1 font-display text-[28px] tracking-wide text-cloud">MASTERING</span>
           </h1>
         </div>
-        <div className="flex gap-2 sm:ml-auto">
+        <div className="flex flex-wrap gap-2 sm:ml-auto">
+          <Link href="/visualizer" className="xr-button min-h-11 px-4 no-underline" data-testid="visualizer-link">Visualizer</Link>
           <button type="button" data-testid="hints-toggle" aria-pressed={hints} className={`xr-button min-h-11 px-4 ${hints ? 'border-gold text-gold' : ''}`} onClick={onHints}>
             {/* Fixed name with aria-pressed; the on/off word is visual only. */}
             Hints <span aria-hidden className={hints ? 'text-gold' : 'text-muted'}>{hints ? 'On' : 'Off'}</span>

@@ -8,20 +8,20 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const BASE = 'https://voidremastered.ca/wp-content/plugins/void-audio/assets/js';
-const PLUGIN_VERSION = '0.22.0-alpha.11';
+const PLUGIN_VERSION = '0.22.0-alpha.12';
 const FILES = {
   'void-dsp.js': '4154dd4ad1510eb340c7945c613be5410d7e0d4f5ba1e169253ac7866b9563c8',
   'void-meter.js': '4b127796828c6976866a5d9008843c08fe6d8b2e82b591e4969d1c546daa53f1',
   'void-peak.js': '097f4314da83c2b32d3b9467bd4e7a406ad01e389a41387a59d659541baf5173',
   'void-analysis.js': '37c62334857853fa7233894349e5a1d827037add21ad1715f1d42e4f8aafc70e',
   'void-safety.js': '9378a357a2cd28764d578d0129e1819c92f9a45c236a6b05cdb25c51114ff5b9',
-  'void-engine.js': '0cb67f00f5e8c88442f1080fa7b73cd0976c4719f5d2789e2239c7d223f68db4',
+  'void-engine.js': '10c26c6f7ebdc48ba6989e58c74b37f232d5430b780bea76c5208c7fd0d45d01',
   'void-target.js': 'f6bdc6e33252ddaa91cd0bb6c2c6b29d9d32b18856cdab600acf404b93e59361',
   'void-auto.js': 'df5dcdb2a466717c22680093b19aa8a9d7644a033451bfa62c1b4898c609034e',
   // Only its local tonal profile() is used; its network request path is never called.
   'void-ai.js': '2625ae5ce387cc93cbf9cde839190b7e1f3bc4624db68f2e8908a6bad34485ce',
   // MP3 re-encode policy (its LAME worker is not fetched) and the local PDF/ZIP report.
-  'void-export.js': '0aef2d8d5ceed1cf4018836df6e2b0ab1b28aa467fc381d0d80c4693d3d286af',
+  'void-export.js': '1350111b930812bceb3ac7ede7f4c2651f972c6a51c5f46c2a9f591ea58390fe',
   'void-report.js': '175f459447b4f843451a31a82c9329eb351d880d17bd2a152de16f6134097ff3',
 };
 

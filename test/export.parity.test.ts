@@ -76,7 +76,9 @@ class FakeMp3Worker {
   postMessage(data: { type: string; channels?: Float32Array[] }) {
     setTimeout(() => {
       if (data.type === 'init') return this.onmessage?.({ data: { ready: true } });
-      if (data.type === 'chunk') { this.chunks.push(data.channels!.map(c => c.slice())); return this.onmessage?.({ data: {} }); }
+      // Like a real LAME worker, every chunk answers with (possibly empty) MP3 bytes; the
+      // reference rejects replies that carry neither bytes nor ready since 0.22.0-alpha.12.
+      if (data.type === 'chunk') { this.chunks.push(data.channels!.map(c => c.slice())); return this.onmessage?.({ data: { bytes: new ArrayBuffer(0) } }); }
       const channels = this.chunks[0]!.map((_, ch) => {
         const all = new Float32Array(this.chunks.reduce((n, c) => n + c[ch]!.length, 0));
         let o = 0;

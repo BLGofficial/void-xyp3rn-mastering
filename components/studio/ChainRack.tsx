@@ -1,5 +1,6 @@
 'use client';
 
+import { useId, useState } from 'react';
 import { createState, DEFINITIONS, MAX_PROCESSORS, type ChainState, type ProcessorId, type ProcessorState, type Quality } from '@/lib/dsp';
 import { paramKey } from '@/lib/guide';
 import { Hint, useHint } from './hints';
@@ -41,11 +42,25 @@ interface ChainHints { bypass: string; remove: string }
 
 function ModuleCard({ proc, onChange, onRemove, hints }: { proc: ProcessorState; onChange: (p: ProcessorState) => void; onRemove?: () => void; hints: ChainHints }) {
   const def = DEFINITIONS[proc.id];
+  // Phones: collapsed to a header (name + On/Off), so the chain reads as a list. Desktop always shows controls.
+  const [open, setOpen] = useState(false);
+  const body = useId();
   const set = (key: string, value: number) => onChange({ ...proc, parameters: { ...proc.parameters, [key]: value } });
   return (
     <article className={`xr-module border p-4 ${proc.bypassed ? 'xr-off border-line' : 'border-gold-dim'}`} aria-label={def.name}>
-      <header className="mb-3 flex items-center justify-between gap-2">
-        <h3 className={`font-heading text-sm font-bold ${proc.bypassed ? 'text-ash' : 'text-cloud'}`}>{def.name}</h3>
+      <header className={`flex items-center justify-between gap-2 lg:mb-3 ${open ? "mb-3" : ""}`}>
+        <h3 className={`min-w-0 font-heading text-sm font-bold ${proc.bypassed ? 'text-ash' : 'text-cloud'}`}>
+          <button
+            type="button" aria-expanded={open} aria-controls={body} aria-label={`${def.name} controls`} onClick={() => setOpen(o => !o)}
+            className="-my-1 flex min-h-11 items-center gap-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold lg:hidden"
+          >
+            <svg aria-hidden viewBox="0 0 12 12" className={`h-3 w-3 shrink-0 text-gold transition-transform duration-200 ${open ? 'rotate-90' : ''}`}>
+              <path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.6" />
+            </svg>
+            {def.name}
+          </button>
+          <span className="hidden lg:inline">{def.name}</span>
+        </h3>
         <div className="flex gap-1.5">
           {onRemove && <button type="button" onClick={onRemove} className="min-h-11 min-w-11 px-1.5 font-mono text-xs uppercase text-muted hover:text-gold sm:min-h-0 sm:min-w-0" aria-label={`Remove ${def.name}`} aria-describedby={hints.remove}>✕</button>}
           <Toggle pressed={!proc.bypassed} onClick={() => onChange({ ...proc, bypassed: !proc.bypassed })} label={`${def.name} on`} describedBy={hints.bypass}>
@@ -53,7 +68,7 @@ function ModuleCard({ proc, onChange, onRemove, hints }: { proc: ProcessorState;
           </Toggle>
         </div>
       </header>
-      <div className="space-y-2.5">
+      <div id={body} className={`space-y-2.5 lg:block ${open ? '' : 'hidden'}`}>
         {Object.entries(def.parameters).map(([key, p]) =>
           MODE_LABELS[key] ? (
             <ModeSwitch

@@ -34,6 +34,7 @@ export async function renderProposal(buffer: AudioData, metrics: TrackMetrics, c
     options.onStatus?.(`Auto: rendering candidate ${pass + 1}...`);
     output = await renderChain(buffer, state, { ...options, onRenderStats: stats => { reduction = stats.maxLimiterReductionDb; } });
     options.onStatus?.('Auto: checking loudness and peaks...');
+    options.onPhase?.({ phase: 'measure' });
     measured = await analyzeTrack(output, options);
     const assessment = evaluateSafety(metrics, measured, state, {
       stats: output.processingStats, limiterBudget: proposal.budget,

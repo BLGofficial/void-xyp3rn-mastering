@@ -63,6 +63,23 @@ const numberIn = async (testId: string) => {
   return n;
 };
 
+/**
+ * Record every stage the render overlay shows, in order, from the next render on.
+ * A MutationObserver sees each change even when stages pass faster than polling.
+ */
+const recordPhases = (target: Page = page) => target.evaluate(() => {
+  const log: string[] = [];
+  (window as unknown as { __phases: string[] }).__phases = log;
+  const push = (v: string | null | undefined) => { if (v && log[log.length - 1] !== v) log.push(v); };
+  new MutationObserver(records => {
+    for (const r of records) {
+      if (r.type === 'attributes') push((r.target as HTMLElement).dataset.phase);
+      r.addedNodes.forEach(n => { if (n instanceof HTMLElement) push(n.dataset.phase ?? n.querySelector<HTMLElement>('[data-phase]')?.dataset.phase); });
+    }
+  }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-phase'] });
+});
+const recordedPhases = (target: Page = page) => target.evaluate(() => (window as unknown as { __phases: string[] }).__phases);
+
 beforeAll(async () => {
   if (!existsSync('out/index.html')) throw new Error('No static export: run `npm run build` first.');
   server = (await serve('out')) as Server;
@@ -126,12 +143,21 @@ describe('XYP3RN MASTERING studio', () => {
     await page.getByTestId('target-select').selectOption('-14');
     await page.getByTestId('format-select').selectOption('pcm24');
     await page.getByTestId('dither').check();
+    await recordPhases();
     await page.getByTestId('render').click();
     // Overlay structure is checked in the cancel test, where the render's end is under the test's control.
     await page.getByTestId('render-orb').waitFor();
     await page.getByTestId('report-status').filter({ hasText: /reached|limited/i }).waitFor({ timeout: 180_000 });
     await page.getByTestId('rendered-file-name').waitFor({ timeout: 60_000 });
-    expect(await page.getByTestId('render-orb').count()).toBe(0);
+    await page.getByTestId('render-orb').waitFor({ state: 'detached', timeout: 10_000 });
+    // The orb followed the engine's real stages: the chain pass, loudness passes with their
+    // true-peak checks, then the lock once the master was final (not at the chain's 100%).
+    const phases = await recordedPhases();
+    expect(phases[0]).toBe('render');
+    expect(phases).toContain('measure');
+    expect(phases).toContain('peak');
+    expect(phases[phases.length - 1]).toBe('locked');
+    expect(phases.indexOf('measure')).toBeGreaterThan(phases.indexOf('render'));
     expect(await page.getByTestId('rendered-audio').getAttribute('src')).toMatch(/^blob:/);
     expect(await page.getByTestId('report-status').textContent()).toMatch(/reached/i);
     expect(Math.abs((await numberIn('report-lufs')) + 14)).toBeLessThanOrEqual(0.2);
@@ -164,7 +190,8 @@ describe('XYP3RN MASTERING studio', () => {
     await page.getByTestId('render-orb').waitFor();
     await page.getByText('Engine: warm preset ready').waitFor({ timeout: 180_000 });
     await page.getByTestId('rendered-file-name').waitFor();
-    expect(await page.getByTestId('render-orb').count()).toBe(0);
+    // The sheet holds briefly on the lock pulse after success, then closes.
+    await page.getByTestId('render-orb').waitFor({ state: 'detached', timeout: 10_000 });
     expect(await page.getByTestId('auto-notes').locator('li').count()).toBeGreaterThanOrEqual(5);
   });
 
@@ -311,9 +338,15 @@ describe('XYP3RN MASTERING studio', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.getByTestId('render').click();
     await page.getByTestId('render-orb').waitFor();
-    // The render takes over the whole viewport, as a dialog, with Cancel focused as its way out.
+    // The render is a modal dialog over the whole viewport, with Cancel focused as its way out...
     const viewport = page.viewportSize()!;
     expect(await page.getByTestId('render-orb').boundingBox()).toMatchObject({ x: 0, y: 0, width: viewport.width, height: viewport.height });
+    // ...shown as a compact glass sheet over the dimmed, blurred studio: the orb stays small and square.
+    const sheet = (await page.getByTestId('orb-sheet').boundingBox())!, stage = (await page.getByTestId('orb-stage').boundingBox())!;
+    expect(sheet.width).toBeLessThanOrEqual(460);
+    expect(stage.width).toBeLessThanOrEqual(380);
+    expect(Math.abs(stage.width - stage.height)).toBeLessThanOrEqual(1);
+    expect(await page.getByTestId('orb-sheet').evaluate(el => getComputedStyle(el).backdropFilter)).toMatch(/blur/);
     expect(await page.getByTestId('render-orb').getAttribute('role')).toBe('dialog');
     await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('cancel');
     await expect.poll(() => page.getByTestId('render-orb').getAttribute('data-orb')).toBe('still');
@@ -328,10 +361,20 @@ describe('XYP3RN MASTERING studio', () => {
     // ...and so is its Cancel button. With motion on, the orb is fed live render levels; on this
     // software-GL runner the performance guard swaps in the video so the page stays responsive.
     await page.emulateMedia({ reducedMotion: 'no-preference' });
+    // Drive the limiter so the chain really reduces gain.
+    const trim = page.getByRole('article', { name: 'Input Trim' }).getByRole('slider', { name: 'Gain' });
+    const limiterOn = page.getByRole('article', { name: 'Brickwall Limiter' }).getByRole('button', { name: 'Brickwall Limiter on' });
+    await trim.fill('12');
+    if ((await limiterOn.getAttribute('aria-pressed')) !== 'true') await limiterOn.click();
     await page.getByTestId('render').click();
     await page.getByTestId('render-orb').waitFor();
     await expect.poll(() => page.getByTestId('render-orb').getAttribute('data-orb'), { timeout: 15_000 }).toMatch(/^(webgl|video)$/);
     await expect.poll(async () => Number(await page.getByTestId('orb-stage').getAttribute('data-energy')), { timeout: 15_000 }).toBeGreaterThan(0);
+    // Live telemetry from the chain pass: stage and measured gain reduction (the limiter is on here).
+    expect(await page.getByTestId('render-orb').getAttribute('data-phase')).toBe('render');
+    expect(await page.getByTestId('orb-sys').textContent()).toBe('RENDER');
+    await expect.poll(async () => Number(await page.getByTestId('orb-stage').getAttribute('data-reduction')), { timeout: 15_000 }).toBeGreaterThan(0);
+    expect(await page.getByTestId('orb-gr').textContent()).toMatch(/^[−-]\d+\.\d dB$/);
     await page.getByTestId('cancel').click();
     // The status already read 'cancelled' from the Esc round: wait for the overlay itself to close.
     await page.getByTestId('render-orb').waitFor({ state: 'detached', timeout: 30_000 });
@@ -340,6 +383,7 @@ describe('XYP3RN MASTERING studio', () => {
     expect(await page.getByTestId('cancel').count()).toBe(0);
     expect(await page.getByTestId('render').isEnabled()).toBe(true);
     await page.getByRole('button', { name: 'Standard' }).click();
+    await trim.fill('0');
   });
 
   it('runs the WebGL mastering orb when forced, and releases it when the render ends', async () => {

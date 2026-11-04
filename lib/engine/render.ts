@@ -33,8 +33,9 @@ export async function measureTruePeak(buffer: AudioData, options: ProgressOption
  * under `ceilingDbtp` with 0.05 dB margin. A static gain, not a dynamic limiter.
  * @throws EngineError `TRUE_PEAK_FAILED` if the result still exceeds the ceiling.
  */
-export async function protectTruePeak(buffer: AudioData, ceilingDbtp: number, options: ProgressOptions = {}): Promise<PeakGuard> {
+export async function protectTruePeak(buffer: AudioData, ceilingDbtp: number, options: ProgressOptions & Pick<EngineOptions, 'onPhase'> = {}): Promise<PeakGuard> {
   requireValue(Number.isFinite(ceilingDbtp) && ceilingDbtp >= -12 && ceilingDbtp <= -0.1, 'Invalid output true-peak ceiling.');
+  options.onPhase?.({ phase: 'peak' });
   const before = await measureTruePeak(buffer, options);
   const validation = await inspectPeaks(buffer, ceilingDbtp, options);
   const attenuationDb = Math.max(0, Math.max(before, validation.checkedPeakDbtp) - ceilingDbtp + 0.05);
@@ -79,13 +80,22 @@ async function renderImpl(input: AudioData, state: ChainState, options: EngineOp
     const histogram = [0, 0, 0, 0, 0, 0];
     // Run `latency` extra frames so the lookahead flushes and output is time-aligned with input.
     const total = output.length + chain.latency;
+    const telemetry = options.onBlock;
+    options.onPhase?.({ phase: 'render' });
     for (let base = 0; base < total; base += RENDER_BLOCK) {
       await checkpoint(options);
-      let energy = 0, counted = 0;
+      let energy = 0, counted = 0, peak = 0, blockReductionDb = 0;
       for (let i = base; i < Math.min(base + RENDER_BLOCK, total); i++) {
         for (let c = 0; c < channels; c++) frame[c] = i < input.length ? input.channels[c]![i]! : 0;
         chain.processFrame(frame);
         for (const l of limiters) maxLimiterReductionDb = Math.max(maxLimiterReductionDb, l.reductionDb);
+        if (telemetry) {
+          // Compressor and limiter reduce in series, so their dB add up.
+          let frameReduction = 0;
+          for (const m of limiters) frameReduction += m.reductionDb;
+          for (const m of compressors) frameReduction += m.reductionDb;
+          if (frameReduction > blockReductionDb) blockReductionDb = frameReduction;
+        }
         if (i < input.length) {
           let totalReduction = 0;
           for (const comp of compressors) { maxDynamicsReductionDb = Math.max(maxDynamicsReductionDb, comp.reductionDb); totalReduction += comp.reductionDb; }
@@ -96,13 +106,17 @@ async function renderImpl(input: AudioData, state: ChainState, options: EngineOp
         if (i >= chain.latency) {
           for (let c = 0; c < channels; c++) {
             output.channels[c]![i - chain.latency] = frame[c]!;
-            if (options.onLevel) energy += frame[c]! * frame[c]!;
+            if (telemetry) {
+              energy += frame[c]! * frame[c]!;
+              const a = Math.abs(frame[c]!);
+              if (a > peak) peak = a;
+            }
           }
           counted += channels;
         }
       }
       options.onProgress?.(Math.min(1, (base + RENDER_BLOCK) / total));
-      options.onLevel?.(counted ? Math.sqrt(energy / counted) : 0);
+      telemetry?.({ rms: counted ? Math.sqrt(energy / counted) : 0, peak, reductionDb: blockReductionDb });
     }
     if (tail) {
       // 50 ms linear fade so a truncated effect tail never ends on a click.

@@ -1,7 +1,7 @@
 import type { Intention, Style } from '../lib/auto';
 import type { ChainState } from '../lib/dsp';
 import type { WavFormat } from '../lib/engine';
-import type { AudioData, TrackMetrics } from '../lib/engine';
+import type { AudioData, BlockTelemetry, EnginePhase, TrackMetrics } from '../lib/engine';
 import { decodeCompressed, sniffFile } from './import';
 import type { Measurer } from '../lib/export';
 import type { PeakInspection } from '../lib/meter';
@@ -10,8 +10,10 @@ import type { AutoResult, EngineInbound, EngineReply, EngineRequest, ExportResul
 export interface EngineCallbacks {
   onStatus?: (message: string) => void;
   onProgress?: (fraction: number) => void;
-  /** RMS of the audio being rendered right now (renders, Auto, presets). */
-  onLevel?: (rms: number) => void;
+  /** Level, peak and gain reduction of the audio being rendered right now (renders, Auto, presets). */
+  onBlock?: (block: BlockTelemetry) => void;
+  /** Each engine stage as it starts. */
+  onPhase?: (phase: EnginePhase) => void;
 }
 
 /** Error from the engine worker, carrying its machine-readable code. */
@@ -53,7 +55,8 @@ export function createEngineClient(): EngineClient {
     if (!p) return;
     if (data.kind === 'status') p.cb?.onStatus?.(data.message);
     else if (data.kind === 'progress') p.cb?.onProgress?.(data.fraction);
-    else if (data.kind === 'level') p.cb?.onLevel?.(data.rms);
+    else if (data.kind === 'block') p.cb?.onBlock?.(data.block);
+    else if (data.kind === 'phase') p.cb?.onPhase?.(data.phase);
     else {
       pending.delete(data.id);
       if (data.kind === 'done') p.resolve(data.result as never);

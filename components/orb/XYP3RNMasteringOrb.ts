@@ -1,5 +1,7 @@
 // Procedural mastering orb (three.js points + bloom). Public API as delivered:
-// setProgress(0..1), setTransient(level), triggerLockPulse(), start/stop/destroy.
+// setProgress(0..1), setTransient(level), triggerLockPulse(), start/stop/destroy;
+// plus the engine's live telemetry: setReduction, setPeak and setPhase, so every
+// motion maps to something the render is actually doing.
 // Fixes over the original: the lock pulse now decays (it read getDelta() right
 // after getElapsedTime(), which always returned ~0), destroy() releases the GPU
 // context, size follows the container, and the palette keeps to studio colours
@@ -11,6 +13,8 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
+const clamp01 = (v: number) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
+
 const VERTEX = /* glsl */ `
   uniform float uTime;
   uniform float uRadius;
@@ -18,6 +22,10 @@ const VERTEX = /* glsl */ `
   uniform float uTransient;
   uniform float uLockPulse;
   uniform float uPixelRatio;
+  uniform float uReduction; // 0..1: compressor + limiter gain reduction
+  uniform float uPeak;      // 0..1: block peak approaching full scale
+  uniform float uMeasure;   // 0..1: loudness measurement stage
+  uniform float uGuard;     // 0..1: true-peak check stage
 
   varying float vAlpha;
   varying float vRidge;
@@ -88,7 +96,13 @@ const VERTEX = /* glsl */ `
     float scanWave = sin(sphereDir.y * 14.0 - uTime * 9.0) * (1.0 - uProgress);
     float lockShockwave = sin(sphereDir.y * 8.0 - uLockPulse * 12.0) * exp(-uLockPulse * 3.2) * step(0.01, uLockPulse) * 0.12;
 
-    float finalRadius = uRadius - inwardFold + aiJitter + scanWave * 0.07 + uTransient * 0.12 + lockShockwave;
+    // Measuring: a bright latitude ring sweeps the shell, like a meter reading the whole file.
+    float sweepY = sin(uTime * 1.6);
+    float sweepBand = exp(-pow((sphereDir.y - sweepY) * 6.0, 2.0)) * uMeasure;
+
+    // Gain reduction squeezes the shell inward; the peak check tightens it to the ceiling.
+    float finalRadius = uRadius - inwardFold + aiJitter + scanWave * 0.07 + uTransient * 0.12 + lockShockwave
+      - uReduction * 0.16 - uGuard * 0.05 + sweepBand * 0.06;
     vec3 pos = sphereDir * finalRadius;
 
     vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
@@ -103,10 +117,10 @@ const VERTEX = /* glsl */ `
     float innerWindow = smoothstep(-0.28, 0.22, shellMask + abs(sphereDir.x) * 0.35);
     float visibility = max(innerWindow, rimGlow * (0.82 + uProgress * 0.18));
 
-    vRidge = clamp(rimGlow * 1.1 + abs(n2) * 0.65 + abs(scanWave) * 0.6, 0.0, 1.6);
+    vRidge = clamp(rimGlow * 1.1 + abs(n2) * 0.65 + abs(scanWave) * 0.6 + uReduction * 0.4 + uPeak * 0.6 + uGuard * rimGlow * 0.5, 0.0, 1.8);
     vAlpha = visibility * (0.22 + vRidge * 0.78);
     vUnitPos = sphereDir;
-    vAiScan = rawChaos * 0.85 + abs(scanWave) * 0.6;
+    vAiScan = rawChaos * 0.85 + abs(scanWave) * 0.6 + sweepBand * 0.8 + uPeak * 0.4;
 
     gl_PointSize = (2.4 + vRidge * 1.8 + rawChaos * 1.6) * uPixelRatio * (1.0 / -mvPosition.z);
   }
@@ -147,6 +161,13 @@ const FRAGMENT = /* glsl */ `
 /** Seconds the completion shockwave runs before resetting. */
 const LOCK_PULSE_SECONDS = 2.5;
 
+/** What the engine is doing; selects the orb's stage motion. */
+export type OrbPhase = 'analyse' | 'render' | 'measure' | 'peak' | 'locked';
+
+/** Ease `current` toward `target`: `attack` per second rising, `release` falling. */
+const follow = (current: number, target: number, delta: number, attack: number, release: number) =>
+  current + (target - current) * Math.min(1, delta * (target > current ? attack : release));
+
 export class XYP3RNMasteringOrb {
   private readonly container: HTMLElement;
   private readonly scene = new THREE.Scene();
@@ -167,6 +188,10 @@ export class XYP3RNMasteringOrb {
   private lastElapsed = 0;
   /** Smoothed transient: instant attack, eased release, so block-rate levels don't strobe. */
   private transientTarget = 0;
+  private reductionTarget = 0;
+  private peakTarget = 0;
+  private measureTarget = 0;
+  private guardTarget = 0;
 
   /** Throws if WebGL is unavailable; callers fall back to a non-WebGL visual. */
   constructor(container: HTMLElement) {
@@ -208,6 +233,10 @@ export class XYP3RNMasteringOrb {
         uTransient: { value: 0 },
         uLockPulse: { value: 0 },
         uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+        uReduction: { value: 0 },
+        uPeak: { value: 0 },
+        uMeasure: { value: 0 },
+        uGuard: { value: 0 },
       },
       vertexShader: VERTEX,
       fragmentShader: FRAGMENT,
@@ -236,7 +265,24 @@ export class XYP3RNMasteringOrb {
 
   /** Audio energy, 0..1. */
   setTransient(value: number): void {
-    this.transientTarget = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+    this.transientTarget = clamp01(value);
+  }
+
+  /** Gain reduction the chain applies right now, 0..1 (callers map dB). */
+  setReduction(value: number): void {
+    this.reductionTarget = clamp01(value);
+  }
+
+  /** Block peak against full scale, 0..1: flashes the ridges as the master nears the ceiling. */
+  setPeak(value: number): void {
+    this.peakTarget = clamp01(value);
+  }
+
+  /** Engine stage: measuring sweeps a ring over the shell; the peak check tightens it. */
+  setPhase(phase: OrbPhase): void {
+    this.measureTarget = phase === 'measure' ? 1 : 0;
+    this.guardTarget = phase === 'peak' ? 1 : 0;
+    if (phase !== 'render') { this.reductionTarget = 0; this.peakTarget = 0; }
   }
 
   /** Completion shockwave. */
@@ -281,6 +327,13 @@ export class XYP3RNMasteringOrb {
 
     const current = u.uTransient!.value as number;
     u.uTransient!.value = this.transientTarget > current ? this.transientTarget : current + (this.transientTarget - current) * Math.min(1, delta * 6);
+
+    u.uReduction!.value = follow(u.uReduction!.value as number, this.reductionTarget, delta, 12, 3);
+    // Peaks: near-instant flash, quick decay, so each hit reads as a hit.
+    u.uPeak!.value = follow(u.uPeak!.value as number, this.peakTarget, delta, 30, 8);
+    this.peakTarget *= Math.max(0, 1 - delta * 8);
+    u.uMeasure!.value = follow(u.uMeasure!.value as number, this.measureTarget, delta, 3, 3);
+    u.uGuard!.value = follow(u.uGuard!.value as number, this.guardTarget, delta, 3, 3);
 
     const lock = u.uLockPulse!.value as number;
     if (lock > 0) u.uLockPulse!.value = lock + delta > LOCK_PULSE_SECONDS ? 0 : lock + delta;

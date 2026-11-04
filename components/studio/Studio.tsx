@@ -7,6 +7,7 @@ import { createPlayer, type Player } from '@/audio/player';
 import type { AutoResult, LiveMeters, LoadResult, RenderResult } from '@/audio/protocol';
 import type { Intention, Style } from '@/lib/auto';
 import { defaultState, type ChainState } from '@/lib/dsp';
+import type { BlockTelemetry, EnginePhase } from '@/lib/engine';
 import { AutoPanel } from './AutoPanel';
 import { ChainRack } from './ChainRack';
 import { ControlGuide } from './ControlGuide';
@@ -75,7 +76,10 @@ export function Studio() {
   const [meters, setMeters] = useState<LiveMeters | null>(null);
   const [introReady, setIntroReady] = useState(false);
   const [cancellable, setCancellable] = useState(false);
-  const [level, setLevel] = useState(0);
+  // Live render telemetry for the overlay orb, and how the last rendering operation ended.
+  const [block, setBlock] = useState<BlockTelemetry | null>(null);
+  const [phase, setPhase] = useState<EnginePhase | null>(null);
+  const [completed, setCompleted] = useState(false);
   const [autoUndo, setAutoUndo] = useState<{ chain: ChainState; ceiling: number } | null>(null);
   const [hints, setHints] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -177,15 +181,16 @@ export function Studio() {
     if (!engine.current || !source || abort.current) return;
     const controller = new AbortController();
     abort.current = controller;
-    setBusy(true); setCancellable(true); setRendering(rendersAudio); setError(null);
+    setBusy(true); setCancellable(true); setRendering(rendersAudio); setError(null); setCompleted(false);
     try {
       await body(controller.signal);
+      setCompleted(true);
     } catch (e) {
       if (controller.signal.aborted || (e as { code?: string }).code === 'CANCELLED') setStatus('Engine: cancelled');
       else fail(e);
     } finally {
       abort.current = null;
-      setBusy(false); setCancellable(false); setRendering(false); setProgress(null); setLevel(0);
+      setBusy(false); setCancellable(false); setRendering(false); setProgress(null); setBlock(null); setPhase(null);
     }
   };
 
@@ -197,7 +202,7 @@ export function Studio() {
   const render = () => operation(true, async signal => {
     // A manual render commits to the current chain; Undo no longer applies.
     setAutoUndo(null);
-    const r = await engine.current!.render(renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress, onLevel: setLevel });
+    const r = await engine.current!.render(renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress, onBlock: setBlock, onPhase: setPhase });
     setStored({ ...r, key: settingsKey(chain, target, ceiling) });
     await prepareRenderedFile(chain, ceiling, signal);
     setStatus('Engine: rendered file ready');
@@ -259,12 +264,12 @@ export function Studio() {
   };
 
   const runAuto = () => operation(true, async signal => {
-    const r = await engine.current!.auto(intention, autoIntensity, target === 'off' ? null : Number(target), renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress, onLevel: setLevel });
+    const r = await engine.current!.auto(intention, autoIntensity, target === 'off' ? null : Number(target), renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress, onBlock: setBlock, onPhase: setPhase });
     await acceptAutomaticResult(r, 'Engine: auto master ready', signal);
   });
 
   const runPreset = (style: Style) => operation(true, async signal => {
-    const r = await engine.current!.preset(style, 50, target === 'off' ? null : Number(target), renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress, onLevel: setLevel });
+    const r = await engine.current!.preset(style, 50, target === 'off' ? null : Number(target), renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress, onBlock: setBlock, onPhase: setPhase });
     await acceptAutomaticResult(r, `Engine: ${style} preset ready`, signal);
   });
 
@@ -287,7 +292,7 @@ export function Studio() {
         <Header status={status} hints={hints} onHints={toggleHints} onGuide={() => setGuideOpen(true)} />
         <ControlGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
         <RenderOverlay
-          open={rendering} status={status} progress={progress} level={level} onCancel={cancel}
+          open={rendering} completed={completed} status={status} progress={progress} block={block} phase={phase} onCancel={cancel}
           sourceLufs={source?.metrics.loudness.integratedLufs ?? null} targetLufs={target === 'off' ? null : Number(target)}
         />
         <main ref={studio} className={`mx-auto grid max-w-[1440px] gap-4 px-4 pb-10 pt-4 md:px-8 lg:grid-cols-[minmax(0,1fr)_360px] ${introReady ? 'xr-studio-intro' : ''}`}>

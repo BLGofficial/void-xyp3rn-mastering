@@ -81,6 +81,7 @@ async function renderImpl(input: AudioData, state: ChainState, options: EngineOp
     const total = output.length + chain.latency;
     for (let base = 0; base < total; base += RENDER_BLOCK) {
       await checkpoint(options);
+      let energy = 0, counted = 0;
       for (let i = base; i < Math.min(base + RENDER_BLOCK, total); i++) {
         for (let c = 0; c < channels; c++) frame[c] = i < input.length ? input.channels[c]![i]! : 0;
         chain.processFrame(frame);
@@ -92,9 +93,16 @@ async function renderImpl(input: AudioData, state: ChainState, options: EngineOp
           const bin = REDUCTION_BOUNDS_DB.findIndex(x => totalReduction < x);
           histogram[bin < 0 ? 5 : bin]!++;
         }
-        if (i >= chain.latency) for (let c = 0; c < channels; c++) output.channels[c]![i - chain.latency] = frame[c]!;
+        if (i >= chain.latency) {
+          for (let c = 0; c < channels; c++) {
+            output.channels[c]![i - chain.latency] = frame[c]!;
+            if (options.onLevel) energy += frame[c]! * frame[c]!;
+          }
+          counted += channels;
+        }
       }
       options.onProgress?.(Math.min(1, (base + RENDER_BLOCK) / total));
+      options.onLevel?.(counted ? Math.sqrt(energy / counted) : 0);
     }
     if (tail) {
       // 50 ms linear fade so a truncated effect tail never ends on a click.

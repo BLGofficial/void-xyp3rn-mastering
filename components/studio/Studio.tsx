@@ -70,6 +70,7 @@ export function Studio() {
   const [meters, setMeters] = useState<LiveMeters | null>(null);
   const [introReady, setIntroReady] = useState(false);
   const [cancellable, setCancellable] = useState(false);
+  const [level, setLevel] = useState(0);
   const [autoUndo, setAutoUndo] = useState<{ chain: ChainState; ceiling: number } | null>(null);
   const abort = useRef<AbortController | null>(null);
 
@@ -166,7 +167,7 @@ export function Studio() {
       else fail(e);
     } finally {
       abort.current = null;
-      setBusy(false); setCancellable(false); setRendering(false); setProgress(null);
+      setBusy(false); setCancellable(false); setRendering(false); setProgress(null); setLevel(0);
     }
   };
 
@@ -178,7 +179,7 @@ export function Studio() {
   const render = () => operation(true, async signal => {
     // A manual render commits to the current chain; Undo no longer applies.
     setAutoUndo(null);
-    const r = await engine.current!.render(renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress });
+    const r = await engine.current!.render(renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress, onLevel: setLevel });
     setStored({ ...r, key: settingsKey(chain, target, ceiling) });
     await prepareRenderedFile(chain, ceiling, signal);
     setStatus('Engine: rendered file ready');
@@ -240,12 +241,12 @@ export function Studio() {
   };
 
   const runAuto = () => operation(true, async signal => {
-    const r = await engine.current!.auto(intention, autoIntensity, target === 'off' ? null : Number(target), renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress });
+    const r = await engine.current!.auto(intention, autoIntensity, target === 'off' ? null : Number(target), renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress, onLevel: setLevel });
     await acceptAutomaticResult(r, 'Engine: auto master ready', signal);
   });
 
   const runPreset = (style: Style) => operation(true, async signal => {
-    const r = await engine.current!.preset(style, 50, target === 'off' ? null : Number(target), renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress });
+    const r = await engine.current!.preset(style, 50, target === 'off' ? null : Number(target), renderState(chain, target, ceiling), { onStatus: setStatus, onProgress: setProgress, onLevel: setLevel });
     await acceptAutomaticResult(r, `Engine: ${style} preset ready`, signal);
   });
 
@@ -265,7 +266,7 @@ export function Studio() {
   return (
     <div className="min-h-screen">
       <Header status={status} />
-      <RenderOverlay open={rendering} status={status} progress={progress} onCancel={cancel} />
+      <RenderOverlay open={rendering} status={status} progress={progress} level={level} onCancel={cancel} />
       <main ref={studio} className={`mx-auto grid max-w-[1440px] gap-4 px-4 pb-10 pt-4 md:px-8 lg:grid-cols-[minmax(0,1fr)_360px] ${introReady ? 'xr-studio-intro' : ''}`}>
         <div className="min-w-0 space-y-4">
           {!source && (

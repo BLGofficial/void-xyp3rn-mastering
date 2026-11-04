@@ -8,6 +8,8 @@ import type { XYP3RNMasteringOrb } from '@/components/orb/XYP3RNMasteringOrb';
 /** What fills the background: the WebGL orb, the video fallback, or a still (reduced motion / loading). */
 type Visual = 'loading' | 'webgl' | 'video' | 'still';
 
+const lufs = (v: number) => v.toFixed(1).replace('-', '\u2212');
+
 /** Block RMS -> 0..1 orb energy: -42 dBFS reads as silence, -6 dBFS as full punch. */
 const energy = (rms: number) => (rms > 0 ? Math.max(0, Math.min(1, (20 * Math.log10(rms) + 42) / 36)) : 0);
 
@@ -17,10 +19,13 @@ const energy = (rms: number) => (rms > 0 ? Math.max(0, Math.min(1, (20 * Math.lo
  * always offers its way out: Cancel, focused on open, and Esc. Cancelling keeps
  * the previous master.
  */
-export function RenderOverlay({ open, status, progress, level, onCancel }: {
+export function RenderOverlay({ open, status, progress, level, sourceLufs, targetLufs, onCancel }: {
   open: boolean; status: string; progress: number | null;
-  /** RMS of the audio being rendered, for the orb's transient response. */
-  level: number; onCancel: () => void;
+  /** RMS of the audio being rendered, for the orb's transient response and the LEVEL readout. */
+  level: number;
+  /** Measured integrated loudness of the source, and the render's target (null = off). */
+  sourceLufs: number | null; targetLufs: number | null;
+  onCancel: () => void;
 }) {
   const stage = useRef<HTMLDivElement>(null);
   const orb = useRef<XYP3RNMasteringOrb | null>(null);
@@ -115,10 +120,21 @@ export function RenderOverlay({ open, status, progress, level, onCancel }: {
   const percent = progress === null ? null : Math.round(progress * 100);
   const step = status.replace(/^Engine:\s*/, '') || 'Rendering…';
 
+  const locking = percent !== null && percent >= 100;
+  // Every readout is measured: source loudness, the requested target, the live level of
+  // the block being rendered, and the engine's own step. Nothing here is simulated.
+  const levelDb = level > 0 ? 20 * Math.log10(level) : null;
+  const metrics: [label: string, value: string, testId: string, accent?: boolean][] = [
+    ['SYS', locking ? 'LOCKING' : 'RENDER', 'orb-sys', true],
+    ['SOURCE', sourceLufs === null ? '—' : `${lufs(sourceLufs)} LUFS`, 'orb-source'],
+    ['TARGET', targetLufs === null ? 'OFF' : `${lufs(targetLufs)} LUFS`, 'orb-target', true],
+    ['LEVEL', levelDb === null ? '—' : `${lufs(levelDb)} dB`, 'orb-level'],
+  ];
+
   return createPortal(
     <div
       data-testid="render-orb" data-orb={visual} role="dialog" aria-modal="true" aria-labelledby="render-title" aria-describedby="render-status"
-      className="xr-overlay-in fixed inset-0 z-[100] overflow-hidden bg-studio"
+      className="xr-overlay-in fixed inset-0 z-[100] overflow-hidden bg-[radial-gradient(circle_at_center,#16120a_0%,#080808_65%,#000_100%)]"
     >
       {(visual === 'loading' || visual === 'still') && (
         <img src="/media/render-orb-poster.webp" alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover" />
@@ -128,32 +144,45 @@ export function RenderOverlay({ open, status, progress, level, onCancel }: {
           <source src="/media/render-orb.mp4" type="video/mp4" />
         </video>
       )}
-      <div ref={stage} data-testid="orb-stage" aria-hidden className="absolute inset-0" />
-      {/* Scrim: keeps the readout legible over the brightest frames of the orb. */}
-      <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/50" />
+      {/* Drag to orbit the orb: the layers above pass pointer events through. */}
+      <div ref={stage} data-testid="orb-stage" aria-hidden className="absolute inset-0 cursor-grab active:cursor-grabbing" />
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/40" />
+      <h2 id="render-title" className="sr-only">Mastering</h2>
 
-      <div className="relative flex h-full flex-col justify-between px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] md:px-10">
-        <div className="flex items-center gap-3">
-          <XyperMark size={28} />
-          <span className="font-display text-2xl tracking-wide text-cloud">XYP3RN MASTERING</span>
-        </div>
+      <div className="pointer-events-none relative flex h-full flex-col items-center justify-between px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]">
+        {/* Telemetry bar */}
+        <dl className="pointer-events-auto flex w-full max-w-[460px] justify-between gap-3 rounded-lg border border-line-card bg-panel/90 px-4 py-2.5 font-mono shadow-[0_10px_30px_rgba(0,0,0,0.8)] backdrop-blur-md">
+          {metrics.map(([label, value, testId, accent]) => (
+            <div key={label} className="flex min-w-0 flex-col items-center gap-0.5">
+              <dt className="text-[9px] tracking-label text-ash">{label}</dt>
+              <dd data-testid={testId} className={`whitespace-nowrap text-[11px] font-semibold tabular-nums ${accent ? 'text-gold [text-shadow:0_0_10px_rgba(250,205,104,0.3)]' : 'text-cloud'}`}>{value}</dd>
+            </div>
+          ))}
+        </dl>
 
-        {/* Glass panel: the readout keeps its contrast over the brightest frames of the orb. */}
-        <div className="xr-glass mx-auto w-full max-w-2xl space-y-4 border border-line p-5 backdrop-blur-md md:p-7">
-          <h2 id="render-title" className="font-display text-5xl leading-none text-cloud md:text-6xl">Mastering</h2>
-          <p id="render-status" aria-live="polite" className="min-h-[1.5em] font-mono text-sm uppercase tracking-label text-gold">{step}</p>
-          <div className="flex items-center gap-3">
-            <progress className="block h-1.5 w-full" max={1} value={progress ?? undefined} aria-label="Render progress" />
-            <span className="w-20 shrink-0 text-right font-mono text-xs tabular-nums text-cloud">
-              {percent === null ? '' : percent < 100 ? `${percent}%` : 'finishing'}
+        {/* Render dock */}
+        <div className="pointer-events-auto flex w-full max-w-[460px] flex-col gap-2.5 rounded-xl border border-line-card bg-surface/90 px-4 py-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.85)] backdrop-blur-md">
+          <div className="flex items-baseline justify-between gap-3 font-mono">
+            <p id="render-status" aria-live="polite" className="min-w-0 truncate text-[11px] uppercase tracking-label text-gold">{step}</p>
+            <span className="shrink-0 text-[13px] font-semibold tabular-nums text-cloud">
+              {percent === null ? '' : `${(progress! * 100).toFixed(1)}%`}
             </span>
           </div>
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-ash">Esc or Cancel stops the render. Your previous master is kept.</p>
-            <button ref={cancel} type="button" data-testid="cancel" className="xr-button min-h-11 px-8" onClick={onCancel}>
+          <div role="progressbar" aria-label="Render progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent ?? undefined} className="h-[3px] w-full overflow-hidden rounded-full bg-line">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-gold-dim via-gold to-cloud shadow-[0_0_12px_#FACD68] transition-[width] duration-75 ease-linear"
+              style={{ width: `${percent ?? 0}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-2 font-mono text-[10px] tracking-label text-ash">
+              <XyperMark size={24} /> <span><span className="hidden sm:inline">XYP3RN MASTERING · </span>LOCAL DSP</span>
+            </span>
+            <button ref={cancel} type="button" data-testid="cancel" className="xr-button min-h-11 shrink-0 px-5" onClick={onCancel}>
               Cancel
             </button>
           </div>
+          <p className="text-[10px] text-muted">Esc or Cancel stops the render; your previous master is kept. Drag to orbit.</p>
         </div>
       </div>
     </div>,

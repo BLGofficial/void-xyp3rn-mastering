@@ -261,6 +261,10 @@ describe('XYP3RN MASTERING studio', () => {
     expect(await page.getByTestId('render-orb').getAttribute('role')).toBe('dialog');
     await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('cancel');
     await expect.poll(() => page.getByTestId('render-orb').getAttribute('data-orb')).toBe('still');
+    // Telemetry is measured, not simulated: the source's loudness as the Source panel shows it, and the target.
+    expect(await page.getByTestId('orb-target').textContent()).toBe('−14.0 LUFS');
+    const sourceLufs = (await page.getByTestId('source-lufs').textContent())!.match(/[−-]?\d+\.\d/)![0];
+    expect(await page.getByTestId('orb-source').textContent()).toContain(sourceLufs);
     expect(await page.getByTestId('orb-stage').locator('canvas').count()).toBe(0);
     await page.keyboard.press('Escape');
     await page.getByText('Engine: cancelled').waitFor({ timeout: 30_000 });

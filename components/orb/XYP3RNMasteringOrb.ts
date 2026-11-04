@@ -6,6 +6,7 @@
 // (Amber is reserved for XYP3RN Records; scan highlight is Cloud, not white).
 
 import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -107,7 +108,7 @@ const VERTEX = /* glsl */ `
     vUnitPos = sphereDir;
     vAiScan = rawChaos * 0.85 + abs(scanWave) * 0.6;
 
-    gl_PointSize = (2.2 + vRidge * 1.8 + rawChaos * 1.6) * uPixelRatio * (1.0 / -mvPosition.z);
+    gl_PointSize = (2.4 + vRidge * 1.8 + rawChaos * 1.6) * uPixelRatio * (1.0 / -mvPosition.z);
   }
 `;
 
@@ -153,6 +154,7 @@ export class XYP3RNMasteringOrb {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly composer: EffectComposer;
   private readonly bloom: UnrealBloomPass;
+  private readonly controls: OrbitControls;
   private readonly geometry: THREE.SphereGeometry;
   private readonly material: THREE.ShaderMaterial;
   private readonly orb: THREE.Points;
@@ -170,8 +172,9 @@ export class XYP3RNMasteringOrb {
   constructor(container: HTMLElement) {
     this.container = container;
     const { width, height } = this.size();
-    this.camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
-    this.camera.position.set(0, 0.05, 6.2);
+    // FOV 46 keeps the orb inside portrait (phone) viewports.
+    this.camera = new THREE.PerspectiveCamera(46, width / height, 0.1, 100);
+    this.camera.position.set(0, 0, 6.2);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
     this.renderer.setSize(width, height);
@@ -188,11 +191,12 @@ export class XYP3RNMasteringOrb {
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(width, height), 0.75, 0.5, 0.15);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(width, height), 0.7, 0.45, 0.16);
     this.composer.addPass(this.bloom);
 
-    const radius = 1.15;
-    this.geometry = new THREE.SphereGeometry(radius, 220, 165);
+    // 180x135 (~24k points, a third fewer than before) keeps mobile GPUs at 60 fps.
+    const radius = 1.1;
+    this.geometry = new THREE.SphereGeometry(radius, 180, 135);
     this.material = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
@@ -210,6 +214,15 @@ export class XYP3RNMasteringOrb {
     });
     this.orb = new THREE.Points(this.geometry, this.material);
     this.scene.add(this.orb);
+
+    // Drag to orbit. No zoom or pan: they collide with page pinch/scroll gestures.
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.05;
+    this.controls.enablePan = false;
+    this.controls.enableZoom = false;
+    this.controls.rotateSpeed = 0.8;
+    this.renderer.domElement.style.touchAction = 'none';
 
     this.resize = new ResizeObserver(() => this.onResize());
     this.resize.observe(container);
@@ -247,6 +260,7 @@ export class XYP3RNMasteringOrb {
   destroy(): void {
     this.stop();
     this.resize.disconnect();
+    this.controls.dispose();
     this.geometry.dispose();
     this.material.dispose();
     this.bloom.dispose();
@@ -274,6 +288,7 @@ export class XYP3RNMasteringOrb {
     const progress = u.uProgress!.value as number;
     this.orb.rotation.y = elapsed * (0.12 + (1 - progress) * 0.18);
     this.orb.rotation.z = Math.sin(elapsed * 0.22) * 0.12;
+    this.controls.update();
     this.composer.render();
   };
 

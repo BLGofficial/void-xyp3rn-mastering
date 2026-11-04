@@ -11,11 +11,31 @@ export interface AudioData extends AudioBufferLike {
   processingStats?: ProcessingStats;
 }
 
+/** One rendered block, measured as it leaves the chain. */
+export interface BlockTelemetry {
+  /** RMS across all channels, linear. */
+  rms: number;
+  /** Highest absolute sample, linear. */
+  peak: number;
+  /** Largest gain reduction the compressor and limiter applied together in the block, dB (>= 0). */
+  reductionDb: number;
+}
+
+/** The stage the engine is in, reported as it starts. */
+export type EnginePhase =
+  | { phase: 'analyse' }
+  | { phase: 'render' }
+  /** Loudness measurement; `pass`/`passes` when it is a loudness-target correction pass. */
+  | { phase: 'measure'; pass?: number; passes?: number }
+  | { phase: 'peak' };
+
 export interface EngineOptions extends ProgressOptions {
   onProgress?: (fraction: number) => void;
   onStatus?: (message: string) => void;
-  /** RMS of each rendered block (all channels), for live visuals. Observes only; output is unchanged. */
-  onLevel?: (rms: number) => void;
+  /** Per-block level, peak and gain reduction, for live visuals. Observes only; output is unchanged. */
+  onBlock?: (block: BlockTelemetry) => void;
+  /** Each engine stage as it starts, for live visuals. */
+  onPhase?: (phase: EnginePhase) => void;
   /** Called once per render with gain-reduction statistics. */
   onRenderStats?: (stats: ProcessingStats) => void;
   /** Working-memory budget in bytes; defaults from device memory (0.5-4 GiB). */

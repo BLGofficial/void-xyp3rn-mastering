@@ -3,7 +3,7 @@
 
 import type { Intention, Style } from '../lib/auto';
 import type { ChainState } from '../lib/dsp';
-import type { PeakGuard, ProcessingStats, SafetyResult, TargetResult, TrackMetrics, WavFormat } from '../lib/engine';
+import type { BlockTelemetry, EnginePhase, PeakGuard, ProcessingStats, SafetyResult, TargetResult, TrackMetrics, WavFormat } from '../lib/engine';
 import type { SourceInfo } from '../lib/import';
 import type { MeterReadings, PeakInspection } from '../lib/meter';
 
@@ -67,8 +67,10 @@ export interface ExportResult {
 export type EngineReply =
   | { id: number; kind: 'status'; message: string }
   | { id: number; kind: 'progress'; fraction: number }
-  /** RMS of recently rendered audio, throttled; drives the render overlay. */
-  | { id: number; kind: 'level'; rms: number }
+  /** Level, peak and gain reduction of recently rendered audio, throttled; drives the render overlay. */
+  | { id: number; kind: 'block'; block: BlockTelemetry }
+  /** The engine stage that just started. */
+  | { id: number; kind: 'phase'; phase: EnginePhase }
   | { id: number; kind: 'done'; result: LoadResult | RenderResult | AutoResult | ExportResult | MasterResult | PeakInspection | TrackMetrics }
   | { id: number; kind: 'error'; code: string; message: string };
 

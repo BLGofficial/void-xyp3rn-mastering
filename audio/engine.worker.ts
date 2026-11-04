@@ -7,7 +7,7 @@ import { intent, renderProposal, suggest, tonalProfile, withLoudnessTarget, type
 import type { ChainState } from '../lib/dsp';
 import {
   analyzeTrack, assertIntegrity, createBuffer, decodeWav, encodeWav, evaluateSafety, preflightWav, renderToTarget, verifyPeak,
-  type AudioData, type TrackMetrics,
+  type AudioData, type BlockTelemetry, type EnginePhase, type TrackMetrics,
 } from '../lib/engine';
 import type { SourceInfo } from '../lib/import';
 import type {
@@ -46,14 +46,19 @@ async function adopt(id: number, buffer: AudioData, metadata: SourceInfo, onStat
 async function handle(id: number, request: EngineRequest, signal: AbortSignal) {
   const onStatus = (message: string) => reply({ id, kind: 'status', message });
   const onProgress = (fraction: number) => reply({ id, kind: 'progress', fraction });
-  // Renders run far faster than real time; ~30 messages/s is plenty for visuals.
-  let lastLevel = 0;
-  const onLevel = (rms: number) => {
+  // Renders run far faster than real time; ~30 messages/s is plenty for visuals. Peaks and
+  // gain reduction are held across skipped blocks so a short hit is never dropped.
+  let lastBlock = 0, heldPeak = 0, heldReduction = 0;
+  const onBlock = (b: BlockTelemetry) => {
+    heldPeak = Math.max(heldPeak, b.peak);
+    heldReduction = Math.max(heldReduction, b.reductionDb);
     const now = performance.now();
-    if (now - lastLevel < 33) return;
-    lastLevel = now;
-    reply({ id, kind: 'level', rms });
+    if (now - lastBlock < 33) return;
+    lastBlock = now;
+    reply({ id, kind: 'block', block: { rms: b.rms, peak: heldPeak, reductionDb: heldReduction } });
+    heldPeak = 0; heldReduction = 0;
   };
+  const onPhase = (phase: EnginePhase) => reply({ id, kind: 'phase', phase });
 
   if (request.type === 'load') {
     onStatus('Checking file...');
@@ -74,7 +79,7 @@ async function handle(id: number, request: EngineRequest, signal: AbortSignal) {
   if (!source || !sourceMetrics) throw Object.assign(new Error('Load a WAV first.'), { code: 'NO_SOURCE' });
 
   if (request.type === 'render') {
-    const out = await renderToTarget(source, request.state, { sourceMetrics, onStatus, onProgress, onLevel, signal });
+    const out = await renderToTarget(source, request.state, { sourceMetrics, onStatus, onProgress, onBlock, onPhase, signal });
     rendered = { buffer: out.buffer, metrics: out.metrics, state: out.state };
     const safety = evaluateSafety(sourceMetrics, out.metrics, out.state, { stats: out.buffer.processingStats });
     const result: RenderResult = { state: out.state, metrics: out.metrics, targetResult: out.targetResult, safety };
@@ -83,10 +88,11 @@ async function handle(id: number, request: EngineRequest, signal: AbortSignal) {
 
   if (request.type === 'auto') {
     onStatus('Auto: profiling tone...');
+    onPhase({ phase: 'analyse' });
     spectrum ??= await tonalProfile(source, { signal });
     const options = request.loudnessTarget === null ? {} : { loudnessTarget: request.loudnessTarget };
     const proposal = intent(source, sourceMetrics, request.intention, spectrum, request.intensity, options);
-    const out = await renderProposal(source, sourceMetrics, proposal, { renderSettings: request.renderSettings, onStatus, onProgress, onLevel, signal });
+    const out = await renderProposal(source, sourceMetrics, proposal, { renderSettings: request.renderSettings, onStatus, onProgress, onBlock, onPhase, signal });
     rendered = { buffer: out.buffer, metrics: out.metrics, state: out.state };
     const result: AutoResult = {
       state: out.state, metrics: out.metrics, safety: out.safety!, notes: out.notes,
@@ -99,7 +105,7 @@ async function handle(id: number, request: EngineRequest, signal: AbortSignal) {
     onStatus(`Preset: ${request.style}...`);
     let proposal = suggest(source, sourceMetrics, request.style, request.intensity);
     if (request.loudnessTarget !== null) proposal = withLoudnessTarget(proposal, request.loudnessTarget);
-    const out = await renderProposal(source, sourceMetrics, proposal, { renderSettings: request.renderSettings, onStatus, onProgress, onLevel, signal });
+    const out = await renderProposal(source, sourceMetrics, proposal, { renderSettings: request.renderSettings, onStatus, onProgress, onBlock, onPhase, signal });
     rendered = { buffer: out.buffer, metrics: out.metrics, state: out.state };
     const result: AutoResult = {
       state: out.state, metrics: out.metrics, safety: out.safety!, notes: out.notes,

@@ -25,6 +25,7 @@ export async function renderToTarget(source: AudioData, state: ChainState, optio
   const final = validateState(state), requested = final.loudnessTarget?.targetLufs;
   if (!Number.isFinite(requested)) {
     const buffer = await renderChain(source, final, options);
+    options.onPhase?.({ phase: 'measure' });
     return { state: final, buffer, metrics: await analyzeTrack(buffer, options), targetResult: null };
   }
   const targetLufs = requested!;
@@ -42,6 +43,7 @@ export async function renderToTarget(source: AudioData, state: ChainState, optio
   for (let pass = 0; pass <= MAX_PASSES; pass++) {
     check(options.signal);
     options.onStatus?.(`Checking final loudness${pass ? ` (${pass}/${MAX_PASSES})` : ''}...`);
+    options.onPhase?.({ phase: 'measure', pass, passes: MAX_PASSES });
     buffer = { ...base, channels: base.channels.map(c => new Float32Array(c.length)) };
     const gain = 10 ** (correction / 20);
     for (let start = 0; start < base.length; start += COPY_BLOCK) {

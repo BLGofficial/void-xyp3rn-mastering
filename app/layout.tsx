@@ -1,15 +1,28 @@
 import type { Metadata, Viewport } from 'next';
-import { Bebas_Neue, DM_Sans, JetBrains_Mono, Syne } from 'next/font/google';
+import localFont from 'next/font/local';
 import { BootHandoff } from '@/components/boot/BootHandoff';
 import { BOOT_SCRIPT, BootSplash } from '@/components/boot/BootSplash';
 import { RegisterServiceWorker } from '@/components/pwa/RegisterServiceWorker';
 import './globals.css';
 
-// Four typefaces, one role each (Brand Guidelines ch. 02).
-const bebas = Bebas_Neue({ weight: '400', subsets: ['latin'], variable: '--font-bebas', display: 'swap' });
-const syne = Syne({ subsets: ['latin'], variable: '--font-syne', display: 'swap' });
-const dmSans = DM_Sans({ subsets: ['latin'], variable: '--font-dm-sans', display: 'swap' });
-const jetbrains = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrains', display: 'swap' });
+// Four typefaces, one role each (Brand Guidelines ch. 02). Fonts are self-hosted so
+// builds and the static PWA never need a Google Fonts request at runtime or build time.
+const bebas = localFont({
+  src: '../node_modules/@fontsource/bebas-neue/files/bebas-neue-latin-400-normal.woff2',
+  weight: '400', style: 'normal', variable: '--font-bebas', display: 'swap',
+});
+const syne = localFont({
+  src: '../node_modules/@fontsource-variable/syne/files/syne-latin-wght-normal.woff2',
+  weight: '400 800', style: 'normal', variable: '--font-syne', display: 'swap',
+});
+const dmSans = localFont({
+  src: '../node_modules/@fontsource-variable/dm-sans/files/dm-sans-latin-wght-normal.woff2',
+  weight: '100 1000', style: 'normal', variable: '--font-dm-sans', display: 'swap',
+});
+const jetbrains = localFont({
+  src: '../node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2',
+  weight: '100 800', style: 'normal', variable: '--font-jetbrains', display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'XYP3RN MASTERING — Local Audio Mastering',

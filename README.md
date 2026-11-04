@@ -34,7 +34,7 @@ npm run typecheck
 | `lib/import` | Source sniffing and FLAC STREAMINFO / MP3 frame-header parsing (native rate, no resampling) |
 | `lib/export` | Decoded-peak-checked MP3 policy, mastering report model, PDF and ZIP writers |
 | `audio/` | Engine Web Worker, AudioWorklet chain processor, player, MP3 encoder worker, export flow |
-| `components/`, `app/` | Next.js 14 studio UI (XYP3RN Tech palette and type) |
+| `components/`, `app/` | Next.js 14 studio UI (XYP3RN Tech palette and type); `/visualizer` is the audio-reactive orb with rendered demo, custom-file and live-mic sources |
 | `test/`, `e2e/` | Parity/standards suites, end-to-end smoke test |
 
 ## Notes
